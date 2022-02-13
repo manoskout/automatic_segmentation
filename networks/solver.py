@@ -2,6 +2,7 @@ import os
 import numpy as np
 import time
 import datetime
+from sklearn.metrics import f1_score, jaccard_score
 import torch
 # Fix memory problem
 torch.cuda.empty_cache()
@@ -123,7 +124,7 @@ class Solver(object):
 		unet_path = os.path.join(self.model_path, '%s-%d-%.4f-%d-%.4f.pkl' %(self.model_type,self.num_epochs,self.lr,self.num_epochs_decay,self.augmentation_prob))
 		valid_loss =0
 		self.unet.eval()
-		dice_c=0
+		dice_c= f1_s = jaccard_s = 0.
 		length = 0 
 		num_val_batches = len(self.valid_loader)		
 		for (image, true_mask) in tqdm(self.valid_loader, total = num_val_batches, desc="Validation Round", unit="batch", leave=False):
@@ -137,6 +138,9 @@ class Solver(object):
 			length += image.size(0)/self.batch_size
 		self.unet.train()
 		dice_c += dice_coeff(pred_mask,true_mask)
+		f1_s += f1_score(pred_mask,true_mask)
+		jaccard_s += jaccard_score(pred_mask, true_mask)
+
 		# Save the prediction
 		# image = nn.Unflatten(image, output_size)
 		self.save_validation_results(image, pred_mask, true_mask,epoch)
@@ -147,7 +151,7 @@ class Solver(object):
 			torch.save(self.unet.state_dict(), unet_path)
 		if num_val_batches == 0:
 			return valid_loss
-		return dice_c
+		return dice_c, f1, jaccard_s
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
@@ -156,6 +160,11 @@ class Solver(object):
 		#===========================================================================================#
 		
 		unet_path = os.path.join(self.model_path, '%s-%d-%.4f-%d-%.4f.pkl' %(self.model_type,self.num_epochs,self.lr,self.num_epochs_decay,self.augmentation_prob))
+		training_log = open(os.path.join(self.result_path,'result_train.csv'), 'a', encoding='utf-8', newline='')
+		validation_log = open(os.path.join(self.result_path,'result_validation.csv'), 'a', encoding='utf-8', newline='')
+		wr_train = csv.writer(training_log)
+		wr_valid = csv.writer(validation_log)
+		
 
 		# U-Net Train
 		if os.path.isfile(unet_path):
@@ -173,9 +182,7 @@ class Solver(object):
 
 				self.unet.train(True)
 				epoch_loss = 0
-				
-				JS = 0.		# Jaccard Similarity
-				dice_c = 0.		# Dice Coefficient
+				jaccard_s = dice_c = f1 = 0.	
 				length = 0
 				with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{self.num_epochs}', unit='img') as pbar:
 					for i, (images, true_masks) in enumerate(self.train_loader):
@@ -207,22 +214,23 @@ class Solver(object):
 						global_step +=1
 						epoch_loss += loss.item()
 
-						JS += get_JS(pred_mask,true_masks)
+						jaccard_s += jaccard_score(pred_mask,true_masks)
 						dice_c += dice_coeff(pred_mask,true_masks)
 						length += images.size(0)/self.batch_size
 						pbar.set_postfix(**{'loss (batch)': loss.item()})
 
 
-				JS = JS/length
+				jaccard_s = jaccard_s/length
 				dice_c = dice_c/length
+				f1_s = f1_s/length
 
 				# Print the log info
-				print('Epoch [%d/%d], Loss: %.4f, \n[Training] JS: %.4f, DC: %.4f' % (
+				print('Epoch [%d/%d], Loss: %.4f, \n[Training] JS: %.4f, DC: %.4f, F1: %.4f' % (
 					  epoch+1, self.num_epochs, \
 					  epoch_loss/n_train,\
-					  JS,dice_c))
-
-			
+					  jaccard_s,dice_c,f1_s))
+				# Update csv
+				wr_train.writerow([jaccard_s,dice_c,f1_s,self.lr, epoch])
 
 				# Decay learning rate
 				if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
@@ -233,14 +241,15 @@ class Solver(object):
 				
 				
 				#===================================== Validation ====================================#
-				dice_c = 0
+				dice_c = f1_c = jaccard_s = 0
 				division_step = (n_train // (10 * self.batch_size))
 				if division_step > 0:
 					if global_step % division_step == 0:	
 						self.unet.train(False)
-						dice_c = self.evaluate(epoch)
+						dice_c, f1_c, jaccard_s = self.evaluate(epoch)
 				# print('[Validation] SE: %.4f, SP: %.4f, PC: %.4f, F1: %.4f, JS: %.4f, DC: %.4f'%(SE,SP,PC,F1,JS,DC))
-				print('[Validation] Dice score: %.4f'%(dice_c))
+				print('[Validation] --> JS: %.4f, DC: %.4f, F1: %.4f'%(jaccard_s, dice_c, f1_s))
+				wr_valid.writerow([jaccard_s,dice_c,f1_s,self.lr, epoch])
 
 					
 			# #===================================== Test ====================================#
@@ -267,10 +276,8 @@ class Solver(object):
 			# unet_score = JS + DC
 
 
-			f = open(os.path.join(self.result_path,'result.csv'), 'a', encoding='utf-8', newline='')
-			wr = csv.writer(f)
-			wr.writerow([self.model_type,JS,dice_c,self.lr,self.num_epochs,self.num_epochs_decay,self.augmentation_prob])
-			f.close()
+			training_log.close()
+			validation_log.close()
 			
 
 			

@@ -64,17 +64,69 @@ def get_F1(SR,GT,threshold=0.5):
 
     return F1
 
-def get_JS(SR,GT,threshold=0.5):
-    # JS : Jaccard similarity
-    SR = SR > threshold
-    GT = GT == torch.max(GT)
+def recall(inputs: Tensor, targets: Tensor) -> float:
+    """
+    """
+    tp = (inputs * targets).sum().to(torch.float32)
+    fn = (inputs * (1 - targets)).sum().to(torch.float32)
+    epsilon = 1e-7
+    return tp / (tp + fn + epsilon)
+
+def precision(inputs: Tensor, targets: Tensor) -> float:
+    """
+    """
+    tp = (inputs * targets).sum().to(torch.float32)
+    fp = ((1 - inputs) * targets).sum().to(torch.float32)
+    epsilon = 1e-7
+    return tp / (tp+fp + epsilon)
+
+def fi_score(targets:torch.Tensor, inputs:torch.Tensor) -> torch.Tensor:
+    '''Calculate F1 score. Can work with gpu tensors
     
-    Inter = torch.sum((SR+GT)==2)
-    Union = torch.sum((SR+GT)>=1)
+    The original implmentation is written by Michal Haltuf on Kaggle.
     
-    JS = float(Inter)/(float(Union) + 1e-6)
+    Returns
+    -------
+    torch.Tensor
+        `ndim` == 1. 0 <= val <= 1
     
-    return JS
+    Reference
+    ---------
+    - https://www.kaggle.com/rejpalcz/best-loss-function-for-f1-score-metric
+    - https://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html#sklearn.metrics.f1_score
+    - https://discuss.pytorch.org/t/calculating-precision-recall-and-f1-score-in-case-of-multi-label-classification/28265/6
+    
+    '''
+    assert inputs.ndim == 1
+    assert targets.ndim == 1 or targets.ndim == 2
+    
+    if targets.ndim == 2:
+        targets = targets.argmax(dim=1)
+        
+    
+    precision = precision(inputs, targets)
+    recall = recall(inputs,targets)
+    epsilon = 1e-7
+
+    f1 = 2* (precision*recall) / (precision + recall + epsilon)
+    return f1
+
+
+def jaccard_score(preds, inputs):
+    inputs = inputs.view(-1)
+    preds = preds.view(-1)
+
+    # Ignore IoU for background class ("0")
+    # for cls in xrange(1, n_classes):  # This goes from 1:n_classes-1 -> class "0" is ignored
+    # pred_inds = targets == cls
+    # target_inds = target == cls
+    intersection = preds.sum()  # Cast to long to prevent overflows
+    union = preds.sum() + inputs.sum() - intersection
+    if union == 0:
+        iou = float('nan')  # If there is no ground truth, do not include in evaluation
+    else:
+        iou = float(intersection) / float(max(union, 1))
+    return iou
 
 def dice_coeff(inputs: Tensor, targets: Tensor, smooth=1):
 #comment out if your model contains a sigmoid or equivalent activation layer
