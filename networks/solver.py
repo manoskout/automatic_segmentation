@@ -1,4 +1,6 @@
 import os
+from cv2 import drawContours
+from matplotlib.pyplot import draw
 import numpy as np
 import time
 import datetime
@@ -14,7 +16,7 @@ from evaluation import *
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
 from tqdm import tqdm
-
+import cv2
 
 class Solver(object):
 	def __init__(self, config, train_loader, valid_loader, test_loader):
@@ -100,21 +102,43 @@ class Solver(object):
 		img = (x[:,0,:,:]>x[:,1,:,:]).float()
 		img = img*255
 		return img
-	
+
+	def getContours(im):
+		imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
+		ret,thresh = cv2.threshold(imgray,127,255,0)
+		contours, _ = cv2.findContours(thresh,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
+		return contours
+	def draw_contours(image,predicted, true_mask):
+		"""
+		This function draws both the predicted mask and ground truth mask
+		The green contours are the predicted
+		The blue contours are the ground truth
+		"""
+		pred_contours = getContours(predicted)
+		true_contours = getContours(true_mask)
+
+		with_pred = cv2.drawContours(image, pred_contours,-1,(0,255,0),1)
+		combined_img = cv2.drawContours(with_pred, true_contours,-1,(255,0,0),1)
+		
+		return combined_img
+
+
+
 	def save_validation_results(self, image, pred_mask, true_mask,epoch):
+		image = image.data.cpu().numpy()
+		pred_mask = pred_mask.data.cpu().numpy()
+		true_mask = true_mask.data.cpu().numpy()
+
+		final_img = drawContours(image,pred_mask,true_mask)
 		torchvision.utils.save_image(
-			image.data.cpu(),
-			os.path.join(self.result_path,'%s_valid_%d_image.png'%(self.model_type,epoch+1))
+			final_img,
+			os.path.join(
+				self.result_path,
+				'%s_valid_%d_result.png'%(self.model_type,epoch+1
+				)
 			)
-		torchvision.utils.save_image(
-			pred_mask.data.cpu(),
-			os.path.join(self.result_path,'%s_valid_%d_pred.png'%(self.model_type,epoch+1))
-			)
-		torchvision.utils.save_image(
-			true_mask.data.cpu(),
-			os.path.join(self.result_path,
-			'%s_valid_%d_true_masks.png'%(self.model_type,epoch+1))
-			)
+		)
+
 
 	
 
@@ -134,15 +158,14 @@ class Solver(object):
 			with torch.no_grad():		
 				pred_mask = self.unet(image)
 				loss = self.criterion(pred_mask,true_mask)
-				valid_loss = loss.item() * image.size(0)
+				valid_loss = loss.item() * (image.size(0)/self.batch_size)
 			length += image.size(0)/self.batch_size
 		self.unet.train()
 		dice_c += dice_coeff(pred_mask,true_mask)
-		f1_s += f1_score(pred_mask,true_mask)
+		f1_s =0
 		jaccard_s += jaccard_score(pred_mask, true_mask)
 
 		# Save the prediction
-		# image = nn.Unflatten(image, output_size)
 		self.save_validation_results(image, pred_mask, true_mask,epoch)
 		if self.min_valid_loss > valid_loss:
 			print(f'Validation Loss Decreased({self.min_valid_loss:.6f}--->{valid_loss:.6f}) \t Saving The Model')
@@ -150,9 +173,8 @@ class Solver(object):
 			# Saving State Dict
 			torch.save(self.unet.state_dict(), unet_path)
 		if num_val_batches == 0:
-			return valid_loss
-		return dice_c, f1, jaccard_s
-
+			return dice_c, f1_s, jaccard_s,valid_loss
+		return dice_c, f1_s, jaccard_s,valid_loss
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
 

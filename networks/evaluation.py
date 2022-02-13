@@ -14,20 +14,6 @@ def get_accuracy(SR,GT,threshold=0.5):
     acc = float(corr)/float(tensor_size)
 
     return acc
-    
-def get_sensitivity(SR,GT,threshold=0.5):
-    # Sensitivity == Recall
-    SR = SR > threshold
-    GT = GT == torch.max(GT)
-
-    # TP : True Positive
-    # FN : False Negative
-    TP = ((SR==1)+(GT==1))==2
-    FN = ((SR==0)+(GT==1))==2
-
-    SE = float(torch.sum(TP))/(float(torch.sum(TP+FN)) + 1e-6)     
-    
-    return SE
 
 def get_specificity(SR,GT,threshold=0.5):
     SR = SR > threshold
@@ -41,28 +27,6 @@ def get_specificity(SR,GT,threshold=0.5):
     SP = float(torch.sum(TN))/(float(torch.sum(TN+FP)) + 1e-6)
     
     return SP
-
-def get_precision(SR,GT,threshold=0.5):
-    SR = SR > threshold
-    GT = GT == torch.max(GT)
-
-    # TP : True Positive
-    # FP : False Positive
-    TP = ((SR==1)+(GT==1))==2
-    FP = ((SR==1)+(GT==0))==2
-
-    PC = float(torch.sum(TP))/(float(torch.sum(TP+FP)) + 1e-6)
-
-    return PC
-
-def get_F1(SR,GT,threshold=0.5):
-    # Sensitivity == Recall
-    SE = get_sensitivity(SR,GT,threshold=threshold)
-    PC = get_precision(SR,GT,threshold=threshold)
-
-    F1 = 2*SE*PC/(SE+PC + 1e-6)
-
-    return F1
 
 def recall(inputs: Tensor, targets: Tensor) -> float:
     """
@@ -97,18 +61,19 @@ def fi_score(targets:torch.Tensor, inputs:torch.Tensor) -> torch.Tensor:
     - https://discuss.pytorch.org/t/calculating-precision-recall-and-f1-score-in-case-of-multi-label-classification/28265/6
     
     '''
-    assert inputs.ndim == 1
-    assert targets.ndim == 1 or targets.ndim == 2
+    # assert inputs.ndim == 1
+    # assert targets.ndim == 1 or targets.ndim == 2
     
-    if targets.ndim == 2:
-        targets = targets.argmax(dim=1)
+    # if targets.ndim == 2:
+    #     targets = targets.argmax(dim=1)
         
     
-    precision = precision(inputs, targets)
-    recall = recall(inputs,targets)
-    epsilon = 1e-7
+    # precision = precision(inputs, targets)
+    # recall = recall(inputs,targets)
+    # epsilon = 1e-7
 
-    f1 = 2* (precision*recall) / (precision + recall + epsilon)
+    # f1 = 2* (precision*recall) / (precision + recall + epsilon)
+    f1 =0
     return f1
 
 
