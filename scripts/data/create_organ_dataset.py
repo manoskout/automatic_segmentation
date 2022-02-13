@@ -12,7 +12,7 @@ DATASET_PATH = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentat
 PATIENTS_PATHS = [os.path.join(DATASET_PATH,i) for i in os.listdir(DATASET_PATH)]
 PATIENTS_MASK_PATHS = []
 ORGAN = "TETE_FEMORALE_D"
-save_as_dicom = True
+
 def mri_to_png(mri_file, png_file):
     """ Function to convert from a DICOM image to png
         @param mri_file: An opened file like object to read te dicom data
@@ -93,5 +93,5 @@ def create_organ_dataset(dataset_path, organ,save_as_dicom):
 
 
                         
-
-create_organ_dataset(DATASET_PATH,ORGAN)
+save_as_dicom = True
+create_organ_dataset(DATASET_PATH,ORGAN, save_as_dicom)

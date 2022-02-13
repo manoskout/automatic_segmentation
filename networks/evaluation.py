@@ -76,27 +76,18 @@ def get_JS(SR,GT,threshold=0.5):
     
     return JS
 
-def dice_coeff(input: Tensor, target: Tensor, reduce_batch_first: bool = False, epsilon=1e-6):
-    # Average of Dice coefficient for all batches, or for a single mask
-    # print(input.size(), target.size())
-    assert input.size() == target.size()
-    if input.dim() == 2 and reduce_batch_first:
-        raise ValueError(f'Dice: asked to reduce batch but got tensor without batch dimension (shape {input.shape})')
+def dice_coeff(inputs: Tensor, targets: Tensor, smooth=1):
+#comment out if your model contains a sigmoid or equivalent activation layer
+    inputs = torch.sigmoid(inputs)       
+    
+    #flatten label and prediction tensors
+    inputs = inputs.view(-1)
+    targets = targets.view(-1)
+    
+    intersection = (inputs * targets).sum()                            
+    dice_value = (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)
 
-    if input.dim() == 2 or reduce_batch_first:
-        inter = torch.dot(input.reshape(-1), target.reshape(-1))
-        sets_sum = torch.sum(input) + torch.sum(target)
-        if sets_sum.item() == 0:
-            sets_sum = 2 * inter
-
-        return (2 * inter + epsilon) / (sets_sum + epsilon)
-    else:
-        # compute and average metric for each batch element
-        dice = 0
-        for i in range(input.shape[0]):
-            dice += dice_coeff(input[i, ...], target[i, ...])
-        return dice / input.shape[0]
-
+    return dice_value
 
 
 

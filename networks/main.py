@@ -69,7 +69,7 @@ if __name__ == '__main__':
     parser.add_argument('--t', type=int, default=3, help='t for Recurrent step of R2U_Net or R2AttU_Net')
     
     # training hyper-parameters
-    parser.add_argument('--img_ch', type=int, default=3)
+    parser.add_argument('--img_ch', type=int, default=1)
     parser.add_argument('--output_ch', type=int, default=1)
     parser.add_argument('--num_epochs', type=int, default=100)
     parser.add_argument('--num_epochs_decay', type=int, default=70)
@@ -87,9 +87,9 @@ if __name__ == '__main__':
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
     parser.add_argument('--model_path', type=str, default='./models')
-    parser.add_argument('--train_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\doitfaster\\train')
-    parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\doitfaster\\validation')
-    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\doitfaster\\test')
+    parser.add_argument('--train_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\train')
+    parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\validation')
+    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\test')
     parser.add_argument('--result_path', type=str, default='./result/')
 
     parser.add_argument('--cuda_idx', type=int, default=1)

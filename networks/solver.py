@@ -123,15 +123,20 @@ class Solver(object):
 		unet_path = os.path.join(self.model_path, '%s-%d-%.4f-%d-%.4f.pkl' %(self.model_type,self.num_epochs,self.lr,self.num_epochs_decay,self.augmentation_prob))
 		valid_loss =0
 		self.unet.eval()
+		dice_c=0
+		length = 0 
 		num_val_batches = len(self.valid_loader)		
 		for (image, true_mask) in tqdm(self.valid_loader, total = num_val_batches, desc="Validation Round", unit="batch", leave=False):
-			image = image.to(self.device)
-			true_mask = true_mask.to(self.device)
+			image = image.to(self.device,dtype=torch.float32)
+			true_mask = true_mask.to(self.device, dtype=torch.float32)
+
 			with torch.no_grad():		
 				pred_mask = self.unet(image)
 				loss = self.criterion(pred_mask,true_mask)
 				valid_loss = loss.item() * image.size(0)
+			length += image.size(0)/self.batch_size
 		self.unet.train()
+		dice_c += dice_coeff(pred_mask,true_mask)
 		# Save the prediction
 		# image = nn.Unflatten(image, output_size)
 		self.save_validation_results(image, pred_mask, true_mask,epoch)
@@ -142,7 +147,7 @@ class Solver(object):
 			torch.save(self.unet.state_dict(), unet_path)
 		if num_val_batches == 0:
 			return valid_loss
-		return valid_loss/num_val_batches
+		return dice_c
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
@@ -163,22 +168,25 @@ class Solver(object):
 			lr = self.lr
 			n_train = len(self.train_loader)
 			global_step = 0
-			print("n_train: ",n_train)
+			# print("n_train: ",n_train)
 			for epoch in range(self.num_epochs):
 
 				self.unet.train(True)
 				epoch_loss = 0
 				
 				JS = 0.		# Jaccard Similarity
-				DC = 0.		# Dice Coefficient
+				dice_c = 0.		# Dice Coefficient
 				length = 0
 				with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{self.num_epochs}', unit='img') as pbar:
 					for i, (images, true_masks) in enumerate(self.train_loader):
 
-
-						images = images.to(self.device)
-						true_masks = true_masks.to(self.device)
-
+						import matplotlib.pyplot as plt
+						images = images.to(self.device,dtype=torch.float32)
+						true_masks = true_masks.to(self.device, dtype=torch.float32)
+						# fig, (ax1,ax2) = plt.subplots(1,2)
+						# ax1.imshow(torch.squeeze(images))
+						# ax2.imshow(torch.squeeze(true_masks))
+						# plt.show()
 						assert images.shape[1] == self.img_ch, \
                     f'Network has been defined with {self.img_ch} input channels, ' \
                     f'but loaded images have {images.shape[1]} channels. Please check that ' \
@@ -195,24 +203,24 @@ class Solver(object):
 						self.grad_scaler.step(self.optimizer)
 						self.grad_scaler.update()
 
-						pbar.update(images.shape[0])
+						pbar.update(int(images.shape[0]/self.batch_size))
 						global_step +=1
 						epoch_loss += loss.item()
 
 						JS += get_JS(pred_mask,true_masks)
-						DC += dice_coeff(pred_mask,true_masks)
-						length += images.size(0)
+						dice_c += dice_coeff(pred_mask,true_masks)
+						length += images.size(0)/self.batch_size
 						pbar.set_postfix(**{'loss (batch)': loss.item()})
 
 
 				JS = JS/length
-				DC = DC/length
+				dice_c = dice_c/length
 
 				# Print the log info
 				print('Epoch [%d/%d], Loss: %.4f, \n[Training] JS: %.4f, DC: %.4f' % (
 					  epoch+1, self.num_epochs, \
 					  epoch_loss/n_train,\
-					  JS,DC))
+					  JS,dice_c))
 
 			
 
@@ -225,6 +233,7 @@ class Solver(object):
 				
 				
 				#===================================== Validation ====================================#
+				dice_c = 0
 				division_step = (n_train // (10 * self.batch_size))
 				if division_step > 0:
 					if global_step % division_step == 0:	
@@ -260,7 +269,7 @@ class Solver(object):
 
 			f = open(os.path.join(self.result_path,'result.csv'), 'a', encoding='utf-8', newline='')
 			wr = csv.writer(f)
-			wr.writerow([self.model_type,JS,DC,self.lr,self.num_epochs,self.num_epochs_decay,self.augmentation_prob])
+			wr.writerow([self.model_type,JS,dice_c,self.lr,self.num_epochs,self.num_epochs_decay,self.augmentation_prob])
 			f.close()
 			
 
