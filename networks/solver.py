@@ -182,7 +182,7 @@ class Solver(object):
 
 				self.unet.train(True)
 				epoch_loss = 0
-				jaccard_s = dice_c = f1 = 0.	
+				jaccard_s = dice_c = f1_s = 0.	
 				length = 0
 				with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{self.num_epochs}', unit='img') as pbar:
 					for i, (images, true_masks) in enumerate(self.train_loader):
@@ -246,7 +246,7 @@ class Solver(object):
 				if division_step > 0:
 					if global_step % division_step == 0:	
 						self.unet.train(False)
-						dice_c, f1_c, jaccard_s = self.evaluate(epoch)
+						dice_c, f1_s, jaccard_s = self.evaluate(epoch)
 				# print('[Validation] SE: %.4f, SP: %.4f, PC: %.4f, F1: %.4f, JS: %.4f, DC: %.4f'%(SE,SP,PC,F1,JS,DC))
 				print('[Validation] --> JS: %.4f, DC: %.4f, F1: %.4f'%(jaccard_s, dice_c, f1_s))
 				wr_valid.writerow([jaccard_s,dice_c,f1_s,self.lr, epoch])
