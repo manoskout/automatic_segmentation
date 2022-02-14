@@ -11,6 +11,7 @@ from PIL import Image, ImageOps
 import matplotlib.pyplot as plt
 import pydicom as dicom
 import cv2 as cv
+import torchio as tio
 class ImageFolder(data.Dataset):
 	def __init__(self, root,image_size=256,mode='train',augmentation_prob=0.4):
 		"""Initializes image paths and preprocessing module."""
@@ -63,7 +64,6 @@ class ImageFolder(data.Dataset):
 		image = cv.resize(image, self.image_size)
 		image = image/np.max(image)
 		image = image.astype(np.float32)
-
 		image = np.expand_dims(image, axis=-1)
 
 		# image = transforms(image)

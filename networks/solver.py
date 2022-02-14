@@ -4,7 +4,6 @@ from matplotlib.pyplot import draw
 import numpy as np
 import time
 import datetime
-from sklearn.metrics import f1_score, jaccard_score
 import torch
 # Fix memory problem
 torch.cuda.empty_cache()
@@ -87,58 +86,37 @@ class Solver(object):
 		print(name)
 		print("The number of parameters: {}".format(num_params))
 
-	def to_data(self, x):
-		"""Convert variable to tensor."""
-		if torch.cuda.is_available():
-			x = x.cpu()
-		return x.data
-
-	def reset_grad(self):
-		"""Zero the gradient buffers."""
-		self.unet.zero_grad()
-
-
-	def tensor2img(self,x):
-		img = (x[:,0,:,:]>x[:,1,:,:]).float()
-		img = img*255
-		return img
-
-	def getContours(im):
-		imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
-		ret,thresh = cv2.threshold(imgray,127,255,0)
-		contours, _ = cv2.findContours(thresh,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
-		return contours
-	def draw_contours(image,predicted, true_mask):
-		"""
-		This function draws both the predicted mask and ground truth mask
-		The green contours are the predicted
-		The blue contours are the ground truth
-		"""
-		pred_contours = getContours(predicted)
-		true_contours = getContours(true_mask)
-
-		with_pred = cv2.drawContours(image, pred_contours,-1,(0,255,0),1)
-		combined_img = cv2.drawContours(with_pred, true_contours,-1,(255,0,0),1)
-		
-		return combined_img
-
-
-
 	def save_validation_results(self, image, pred_mask, true_mask,epoch):
-		image = image.data.cpu().numpy()
-		pred_mask = pred_mask.data.cpu().numpy()
-		true_mask = true_mask.data.cpu().numpy()
+		image = image.data.cpu()
+		pred_mask = pred_mask.data.cpu()
+		true_mask = true_mask.data.cpu()
 
-		final_img = drawContours(image,pred_mask,true_mask)
+		# final_img = drawContours(image,pred_mask,true_mask)
 		torchvision.utils.save_image(
-			final_img,
+			image,
 			os.path.join(
 				self.result_path,
-				'%s_valid_%d_result.png'%(self.model_type,epoch+1
+				'%s_valid_%d_result_INPUT.png'%(self.model_type,epoch+1
 				)
 			)
 		)
-
+		torchvision.utils.save_image(
+			pred_mask,
+			os.path.join(
+				self.result_path,
+				'%s_valid_%d_result_PRED.png'%(self.model_type,epoch+1
+				)
+			)
+		)
+		torchvision.utils.save_image(
+			true_mask,
+			os.path.join(
+				self.result_path,
+				'%s_valid_%d_result_GT.png'%(self.model_type,epoch+1
+				)
+			)
+		)
+		
 
 	
 
@@ -148,7 +126,7 @@ class Solver(object):
 		unet_path = os.path.join(self.model_path, '%s-%d-%.4f-%d-%.4f.pkl' %(self.model_type,self.num_epochs,self.lr,self.num_epochs_decay,self.augmentation_prob))
 		valid_loss =0
 		self.unet.eval()
-		dice_c= f1_s = jaccard_s = 0.
+		dice_c = 0.
 		length = 0 
 		num_val_batches = len(self.valid_loader)		
 		for (image, true_mask) in tqdm(self.valid_loader, total = num_val_batches, desc="Validation Round", unit="batch", leave=False):
@@ -162,8 +140,6 @@ class Solver(object):
 			length += image.size(0)/self.batch_size
 		self.unet.train()
 		dice_c += dice_coeff(pred_mask,true_mask)
-		f1_s =0
-		jaccard_s += jaccard_score(pred_mask, true_mask)
 
 		# Save the prediction
 		self.save_validation_results(image, pred_mask, true_mask,epoch)
@@ -173,8 +149,9 @@ class Solver(object):
 			# Saving State Dict
 			torch.save(self.unet.state_dict(), unet_path)
 		if num_val_batches == 0:
-			return dice_c, f1_s, jaccard_s,valid_loss
-		return dice_c, f1_s, jaccard_s,valid_loss
+			return dice_c,valid_loss
+		return dice_c,valid_loss
+
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
 
@@ -204,7 +181,7 @@ class Solver(object):
 
 				self.unet.train(True)
 				epoch_loss = 0
-				jaccard_s = dice_c = f1_s = 0.	
+				dice_c = 0.	
 				length = 0
 				with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{self.num_epochs}', unit='img') as pbar:
 					for i, (images, true_masks) in enumerate(self.train_loader):
@@ -236,23 +213,20 @@ class Solver(object):
 						global_step +=1
 						epoch_loss += loss.item()
 
-						jaccard_s += jaccard_score(pred_mask,true_masks)
 						dice_c += dice_coeff(pred_mask,true_masks)
 						length += images.size(0)/self.batch_size
 						pbar.set_postfix(**{'loss (batch)': loss.item()})
 
 
-				jaccard_s = jaccard_s/length
 				dice_c = dice_c/length
-				f1_s = f1_s/length
 
 				# Print the log info
-				print('Epoch [%d/%d], Loss: %.4f, \n[Training] JS: %.4f, DC: %.4f, F1: %.4f' % (
+				print('Epoch [%d/%d], Loss: %.4f, \n[Training] DC: %.4f' % (
 					  epoch+1, self.num_epochs, \
 					  epoch_loss/n_train,\
-					  jaccard_s,dice_c,f1_s))
+					  dice_c))
 				# Update csv
-				wr_train.writerow([jaccard_s,dice_c,f1_s,self.lr, epoch])
+				wr_train.writerow([epoch+1,self.lr,epoch_loss/n_train, dice_c])
 
 				# Decay learning rate
 				if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
@@ -263,43 +237,42 @@ class Solver(object):
 				
 				
 				#===================================== Validation ====================================#
-				dice_c = f1_c = jaccard_s = 0
+				dice_c = 0
 				division_step = (n_train // (10 * self.batch_size))
 				if division_step > 0:
 					if global_step % division_step == 0:	
 						self.unet.train(False)
-						dice_c, f1_s, jaccard_s = self.evaluate(epoch)
-				# print('[Validation] SE: %.4f, SP: %.4f, PC: %.4f, F1: %.4f, JS: %.4f, DC: %.4f'%(SE,SP,PC,F1,JS,DC))
-				print('[Validation] --> JS: %.4f, DC: %.4f, F1: %.4f'%(jaccard_s, dice_c, f1_s))
-				wr_valid.writerow([jaccard_s,dice_c,f1_s,self.lr, epoch])
-
-					
-			# #===================================== Test ====================================#
-			# del self.unet
-			# self.build_model()
-			# self.unet.load_state_dict(torch.load(unet_path))
-			
-			# self.unet.train(False)
-			# self.unet.eval()
-			# test_len = len(self.test_loader)
-			# JS = 0.		# Jaccard Similarity
-			# DC = 0.		# Dice Coefficient
-			# for i, (images, true_masks) in enumerate(self.test_loader):
-
-			# 	images = images.to(self.device)
-			# 	true_masks = true_masks.to(self.device)
-			# 	SR = torch.sigmoid(self.unet(images))
-			# 	JS += get_JS(SR,true_masks)
-			# 	DC += dice_coeff(SR,true_masks)
-						
-					
-			# JS = JS/test_len
-			# DC = DC/test_len
-			# unet_score = JS + DC
+						dice_c, valid_loss = self.evaluate(epoch)
+				print('[Validation] --> DC: %.4f, Validation Loss: %.4f'%(dice_c,valid_loss))
+				wr_valid.writerow([epoch+1,self.lr,valid_loss, dice_c])
 
 
 			training_log.close()
 			validation_log.close()
+
+
+# #===================================== Test ====================================#
+# del self.unet
+# self.build_model()
+# self.unet.load_state_dict(torch.load(unet_path))
+
+# self.unet.train(False)
+# self.unet.eval()
+# test_len = len(self.test_loader)
+# DC = 0.		# Dice Coefficient
+# for i, (images, true_masks) in enumerate(self.test_loader):
+
+# 	images = images.to(self.device)
+# 	true_masks = true_masks.to(self.device)
+# 	SR = torch.sigmoid(self.unet(images))
+# 	JS += get_JS(SR,true_masks)
+# 	DC += dice_coeff(SR,true_masks)
 			
+		
+# JS = JS/test_len
+# DC = DC/test_len
+# unet_score = JS + DC
+
+
 
 			

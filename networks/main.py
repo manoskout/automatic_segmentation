@@ -96,4 +96,3 @@ if __name__ == '__main__':
 
     config = parser.parse_args()
     main(config)
-# dt = get_loader("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\train", image_size=512, batch_size=2)
