@@ -8,10 +8,7 @@ according to the organ that user specifies"""
 import pydicom as dicom
 
 import png 
-DATASET_PATH = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\"
-PATIENTS_PATHS = [os.path.join(DATASET_PATH,i) for i in os.listdir(DATASET_PATH)]
-PATIENTS_MASK_PATHS = []
-ORGAN = "TETE_FEMORALE_D"
+
 
 def mri_to_png(mri_file, png_file):
     """ Function to convert from a DICOM image to png
@@ -49,14 +46,13 @@ def mri_to_png(mri_file, png_file):
 def create_organ_dataset(dataset_path, organ,save_as_dicom):
     """
     """
-    ORGAN_PATH =os.path.join(dataset_path,organ)
+    ORGAN_PATH =os.path.join(dataset_path,organ[0])
     ORGAN_MASK_PATH = os.path.join(ORGAN_PATH,"MASK")
     ORGAN_MRI_PATH = os.path.join(ORGAN_PATH,"MRI")
     organ_dcm_path = []
     organ_mask_path = []
     if not os.path.exists(ORGAN_PATH):
         os.mkdir(ORGAN_PATH)
-
     if os.path.exists(ORGAN_PATH):
         if not os.path.exists(ORGAN_MASK_PATH) and not os.path.exists(ORGAN_MRI_PATH):
             os.mkdir(ORGAN_MASK_PATH)
@@ -65,11 +61,12 @@ def create_organ_dataset(dataset_path, organ,save_as_dicom):
         for patient_folder in os.listdir(patient):
             if "MASK" in patient_folder:
                 PATIENTS_MASK_PATHS.append(os.path.join(patient,patient_folder))
-    for mask_path in PATIENTS_MASK_PATHS:
+    for index, mask_path in enumerate(PATIENTS_MASK_PATHS,1):
+
         for folder in os.listdir(mask_path):
-            if folder == organ:
+            if folder in organ:
                 organ_folder = os.path.join(mask_path,folder)
-                # print(organ_folder)
+                print(folder)
                 for img in os.listdir(organ_folder):
                     if ".png" in img: # That means it is a mask
                         dst_path = os.path.join(ORGAN_MASK_PATH,img)
@@ -88,10 +85,12 @@ def create_organ_dataset(dataset_path, organ,save_as_dicom):
                             mri_to_png(mri_file, png_file)
                             png_file.close()
                         organ_dcm_path.append(os.path.join(ORGAN_MRI_PATH,img))
-                    
     return organ_dcm_path, organ_mask_path
 
 
-                        
+DATASET_PATH = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\"
+PATIENTS_PATHS = [os.path.join(DATASET_PATH,i) for i in os.listdir(DATASET_PATH)]
+PATIENTS_MASK_PATHS = []
+ORGAN = ["RECTUM"]            
 save_as_dicom = True
 create_organ_dataset(DATASET_PATH,ORGAN, save_as_dicom)

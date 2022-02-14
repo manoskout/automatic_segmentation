@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from torch import channel_shuffle
 # read image
 
-def resize_keep_geometry(img, new_image_width=512, new_image_height=512,color=(0,0,0)):
+def padding_resize(img, new_image_width=512, new_image_height=512,color=(0,0,0)):
     old_image_height, old_image_width, channels = img.shape
 # create new image of desired size and color (blue) for padding
     new_image_width = 512

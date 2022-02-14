@@ -1,22 +1,15 @@
 import os
-from cv2 import drawContours
-from matplotlib.pyplot import draw
 import numpy as np
-import time
-import datetime
 import torch
 # Fix memory problem
 torch.cuda.empty_cache()
 import torchvision
 from torch import optim
-from torch.autograd import Variable
-import torch.nn.functional as F
-from evaluation import *
+from utils_metrics import *
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
 from tqdm import tqdm
-import cv2
-
+from torch.utils.tensorboard import SummaryWriter
 class Solver(object):
 	def __init__(self, config, train_loader, valid_loader, test_loader):
 
@@ -32,7 +25,8 @@ class Solver(object):
 		self.output_ch = config.output_ch
 		self.criterion = DiceBCELoss()
 		self.augmentation_prob = config.augmentation_prob
-		self.min_valid_loss = np.inf					
+		self.min_valid_loss = np.inf	
+		self.model_name = config.model_name				
 
 		# Hyper-parameters
 		self.lr = config.lr
@@ -40,12 +34,11 @@ class Solver(object):
 		self.beta2 = config.beta2
 		self.amp = False # Pass it as config value
 
-
 		# Training settings
 		self.num_epochs = config.num_epochs
 		self.num_epochs_decay = config.num_epochs_decay
 		self.batch_size = config.batch_size
-
+		
 		# Step size
 		self.log_step = config.log_step
 		self.val_step = config.val_step
@@ -73,25 +66,13 @@ class Solver(object):
 			
 		self.grad_scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
 		self.optimizer = optim.Adam(list(self.unet.parameters()),
-									  self.lr, [self.beta1, self.beta2])
+									 self.lr, [self.beta1, self.beta2])
 		self.unet.to(self.device)
-
-		self.print_network(self.unet, self.model_type)
-
-	def print_network(self, model, name):
-		"""Print out the network information."""
-		num_params = 0
-		for p in model.parameters():
-			num_params += p.numel()
-		print(name)
-		print("The number of parameters: {}".format(num_params))
 
 	def save_validation_results(self, image, pred_mask, true_mask,epoch):
 		image = image.data.cpu()
 		pred_mask = pred_mask.data.cpu()
 		true_mask = true_mask.data.cpu()
-
-		# final_img = drawContours(image,pred_mask,true_mask)
 		torchvision.utils.save_image(
 			image,
 			os.path.join(
@@ -117,50 +98,88 @@ class Solver(object):
 			)
 		)
 		
-
-	
-
-	def evaluate(self,epoch):
+	def evaluation(self,epoch, writer):
 		"""
 		"""
-		unet_path = os.path.join(self.model_path, '%s-%d-%.4f-%d-%.4f.pkl' %(self.model_type,self.num_epochs,self.lr,self.num_epochs_decay,self.augmentation_prob))
+		unet_path = os.path.join(
+			self.model_path, 
+			'%s-%d-%.4f-%d-%.4f.pkl'%(
+				self.model_type,
+				self.num_epochs,
+				self.lr,
+				self.num_epochs_decay,
+				self.augmentation_prob
+				)
+		)
+		
 		valid_loss =0
 		self.unet.eval()
-		dice_c = 0.
 		length = 0 
 		num_val_batches = len(self.valid_loader)		
-		for (image, true_mask) in tqdm(self.valid_loader, total = num_val_batches, desc="Validation Round", unit="batch", leave=False):
+		
+		for (image, true_mask) in tqdm(
+			self.valid_loader, 
+			total = num_val_batches, 
+			desc="Validation Round", 
+			unit="batch", 
+			leave=False):
+
 			image = image.to(self.device,dtype=torch.float32)
 			true_mask = true_mask.to(self.device, dtype=torch.float32)
-
 			with torch.no_grad():		
 				pred_mask = self.unet(image)
 				loss = self.criterion(pred_mask,true_mask)
 				valid_loss = loss.item() * (image.size(0)/self.batch_size)
 			length += image.size(0)/self.batch_size
 		self.unet.train()
-		dice_c += dice_coeff(pred_mask,true_mask)
+		dice_c = dice_coeff(pred_mask,true_mask)
 
 		# Save the prediction
 		self.save_validation_results(image, pred_mask, true_mask,epoch)
 		if self.min_valid_loss > valid_loss:
-			print(f'Validation Loss Decreased({self.min_valid_loss:.6f}--->{valid_loss:.6f}) \t Saving The Model')
+			print(f'[Validation] Loss Decreased({self.min_valid_loss:.6f}--->{valid_loss:.6f}) \t Saving The Model')
 			self.min_valid_loss = valid_loss
 			# Saving State Dict
 			torch.save(self.unet.state_dict(), unet_path)
-		if num_val_batches == 0:
-			return dice_c,valid_loss
+		
+		writer.add_scalar("val_mean_dice", dice_c, epoch + 1)
 		return dice_c,valid_loss
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
 
 		#====================================== Training ===========================================#
-		#===========================================================================================#
 		
-		unet_path = os.path.join(self.model_path, '%s-%d-%.4f-%d-%.4f.pkl' %(self.model_type,self.num_epochs,self.lr,self.num_epochs_decay,self.augmentation_prob))
-		training_log = open(os.path.join(self.result_path,'result_train.csv'), 'a', encoding='utf-8', newline='')
-		validation_log = open(os.path.join(self.result_path,'result_validation.csv'), 'a', encoding='utf-8', newline='')
+		unet_path = os.path.join(
+			self.model_path, 
+			'%s-%d-%.4f-%d-%.4f.pkl' %(
+				self.model_type,
+				self.num_epochs,
+				self.lr,
+				self.num_epochs_decay,
+				self.augmentation_prob
+				)
+			)
+
+		training_log = open(
+			os.path.join(
+				self.result_path,
+				'result_train.csv'
+			),
+			'a', 
+			encoding='utf-8', 
+			newline=''
+		)
+		validation_log = open(
+			os.path.join(
+				self.result_path,
+				'result_validation.csv'
+			), 
+			'a', 
+			encoding='utf-8', 
+			newline=''
+		)
+
 		wr_train = csv.writer(training_log)
 		wr_valid = csv.writer(validation_log)
 		
@@ -176,6 +195,8 @@ class Solver(object):
 			lr = self.lr
 			n_train = len(self.train_loader)
 			global_step = 0
+			writer = SummaryWriter()
+
 			# print("n_train: ",n_train)
 			for epoch in range(self.num_epochs):
 
@@ -183,20 +204,16 @@ class Solver(object):
 				epoch_loss = 0
 				dice_c = 0.	
 				length = 0
+				step = 0
+				epoch_loss_values = list()
 				with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{self.num_epochs}', unit='img') as pbar:
 					for i, (images, true_masks) in enumerate(self.train_loader):
-
-						import matplotlib.pyplot as plt
+						step+=1
 						images = images.to(self.device,dtype=torch.float32)
 						true_masks = true_masks.to(self.device, dtype=torch.float32)
-						# fig, (ax1,ax2) = plt.subplots(1,2)
-						# ax1.imshow(torch.squeeze(images))
-						# ax2.imshow(torch.squeeze(true_masks))
-						# plt.show()
+
 						assert images.shape[1] == self.img_ch, \
-                    f'Network has been defined with {self.img_ch} input channels, ' \
-                    f'but loaded images have {images.shape[1]} channels. Please check that ' \
-                    'the images are loaded correctly.'
+                    f'Network has been defined with {self.img_ch} input channels'
 						
 						with torch.cuda.amp.autocast(enabled=self.amp):
 							pred_mask = self.unet(images)
@@ -215,16 +232,19 @@ class Solver(object):
 
 						dice_c += dice_coeff(pred_mask,true_masks)
 						length += images.size(0)/self.batch_size
+						writer.add_scalar("train_loss", loss.item(), self.num_epochs*epoch + step)
 						pbar.set_postfix(**{'loss (batch)': loss.item()})
-
+					epoch_loss /=step
+					epoch_loss_values.append(epoch_loss)
 
 				dice_c = dice_c/length
 
 				# Print the log info
 				print('Epoch [%d/%d], Loss: %.4f, \n[Training] DC: %.4f' % (
-					  epoch+1, self.num_epochs, \
-					  epoch_loss/n_train,\
-					  dice_c))
+					  epoch+1, self.num_epochs,
+					  epoch_loss/n_train,
+					  dice_c)
+					)
 				# Update csv
 				wr_train.writerow([epoch+1,self.lr,epoch_loss/n_train, dice_c])
 
@@ -242,36 +262,38 @@ class Solver(object):
 				if division_step > 0:
 					if global_step % division_step == 0:	
 						self.unet.train(False)
-						dice_c, valid_loss = self.evaluate(epoch)
-				print('[Validation] --> DC: %.4f, Validation Loss: %.4f'%(dice_c,valid_loss))
+						dice_c, valid_loss = self.evaluation(epoch, writer)
+				print('[Validation] --> DC: %.4f, Loss: %.4f'%(dice_c,valid_loss))
 				wr_valid.writerow([epoch+1,self.lr,valid_loss, dice_c])
 
 
 			training_log.close()
 			validation_log.close()
+			writer.close
 
 
-# #===================================== Test ====================================#
-# del self.unet
-# self.build_model()
-# self.unet.load_state_dict(torch.load(unet_path))
+	#===================================== Test ====================================#
+	def test(self,):
+		unet_path = os.path.join(self.model_path, self.model_name)
+		del self.unet
+		self.build_model()
+		if os.path.isfile(unet_path):
+			# Load the pretrained Encoder
+			self.unet.load_state_dict(torch.load(unet_path))
+			print('%s is Successfully Loaded from %s'%(self.model_type,unet_path))
+	# self.unet.train(False)
+		self.unet.eval()
+		test_len = len(self.test_loader)
+	# DC = 0.		# Dice Coefficient
+		for i, (images, true_masks) in enumerate(self.test_loader):
 
-# self.unet.train(False)
-# self.unet.eval()
-# test_len = len(self.test_loader)
-# DC = 0.		# Dice Coefficient
-# for i, (images, true_masks) in enumerate(self.test_loader):
+			images = images.to(self.device)
+			true_masks = true_masks.to(self.device)
+			pred_masks = self.unet(images)
+			print(dice_coeff(pred_masks,true_masks))
 
-# 	images = images.to(self.device)
-# 	true_masks = true_masks.to(self.device)
-# 	SR = torch.sigmoid(self.unet(images))
-# 	JS += get_JS(SR,true_masks)
-# 	DC += dice_coeff(SR,true_masks)
-			
 		
-# JS = JS/test_len
-# DC = DC/test_len
-# unet_score = JS + DC
+			self.save_validation_results(images, pred_masks, true_masks,test_len-i)
 
 
 

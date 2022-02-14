@@ -1,17 +1,40 @@
 import os
-import random
-from random import shuffle
 import numpy as np
-from sklearn.feature_extraction import img_to_graph
-import torch
 from torch.utils import data
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
-from PIL import Image, ImageOps
-import matplotlib.pyplot as plt
 import pydicom as dicom
 import cv2 as cv
-import torchio as tio
+
+def resize_with_padding(img, new_image_size=(512, 512),color=(0,0,0)):
+	"""
+	This function used in order to keep the geometry of the image the same during the resize method.
+	"""
+	if len(img.shape)==2:
+		# The image is grayscaled
+		# print("The image is grayscaled")
+		old_image_height, old_image_width = img.shape
+
+		# try:
+		result = np.full(new_image_size, 0, dtype=img.dtype)
+		# # compute center offset
+		x_center = (new_image_size[0] - old_image_width) // 2
+		y_center = (new_image_size[1] - old_image_height) // 2
+
+		
+	elif len(img.shape)==3:
+		old_image_height, old_image_width, channels = img.shape
+
+		# try:
+		result = np.full(new_image_size, color, dtype=img.dtype)
+		# # compute center offset
+		x_center = (new_image_size[0] - old_image_width) // 2
+		y_center = (new_image_size[1] - old_image_height) // 2
+
+	# # copy img image into center of result image
+	result[y_center:y_center+old_image_height, x_center:x_center+old_image_width] = img
+	return result
+
 class ImageFolder(data.Dataset):
 	def __init__(self, root,image_size=256,mode='train',augmentation_prob=0.4):
 		"""Initializes image paths and preprocessing module."""
@@ -28,12 +51,8 @@ class ImageFolder(data.Dataset):
 				os.listdir(img_path)
 			)
 		)
-
 		self.image_size = (image_size,image_size)
 		self.mode = mode
-		self.RotationDegree = [0,90,180,270]
-		self.augmentation_prob = augmentation_prob
-
 		print("image count in {} path :{}".format(self.mode,len(self.image_paths)))
 
 	def __getitem__(self, index):
@@ -41,11 +60,6 @@ class ImageFolder(data.Dataset):
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
 		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + 'mask.png')
-		transforms = T.Compose([
-			T.ToPILImage(),
-			T.Resize(self.image_size),
-			T.ToTensor()
-		])
 		to_tensor = T.Compose([
 			T.ToTensor()
 		])
@@ -56,23 +70,23 @@ class ImageFolder(data.Dataset):
 		# image = ImageOps.grayscale(image)
 		image_file = dicom.dcmread(image_path)
 		image = image_file.pixel_array
-		# image = torch.from_numpy(image)
-		# image = np.expand_dims(image,axis=1)
-		# image = to_pil(image)
-		# GT = Image.open(GT_path)
-		# print(image.size, GT.size)
-		image = cv.resize(image, self.image_size)
+		# print(image.dtype)
+		GT = cv.imread(GT_path, cv.IMREAD_GRAYSCALE)
+		# print(GT.dtype)
 		image = image/np.max(image)
 		image = image.astype(np.float32)
-		image = np.expand_dims(image, axis=-1)
-
-		# image = transforms(image)
-		# GT = tr_mask(GT)	
-		GT = cv.imread(GT_path, cv.IMREAD_GRAYSCALE)
-		GT = cv.resize(GT, self.image_size)
 		GT = GT/np.max(GT)
 		GT = GT > 0.5
-		GT = GT.astype(np.float32)
+		GT = GT.astype(np.float32)		
+		if self.mode == "test":
+			image = resize_with_padding(image, new_image_size=self.image_size)
+			GT =resize_with_padding(GT, new_image_size=self.image_size)
+		elif self.mode == "train":
+			image = cv.resize(image,self.image_size)
+			GT = cv.resize(GT,self.image_size)
+
+		
+		image = np.expand_dims(image, axis=-1)
 		GT = np.expand_dims(GT,axis=-1)
 		image = to_tensor(image)
 		GT = to_tensor(GT)

@@ -7,8 +7,7 @@ import shutil
 import random
 from data_aug import augment_data
 import uuid
-root_dir = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D" # data root path
-organ = "TETE_FEMORALE_D"
+
 # classes_dir = ['good', 'bad'] #total labels
 
 
@@ -28,6 +27,8 @@ def splitting(filenames,val_ratio, test_ratio):
 
 if __name__ == "__main__":
     np.random.seed(42)
+    root_dir = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM" # data root path
+    organ = "RECTUM"
     val_ratio = 0.15
     test_ratio = 0.05
     # for cls in classes_dir:
@@ -54,12 +55,12 @@ if __name__ == "__main__":
     print('Training: ', len(mask_train))
     print('Validation: ', len(mask_val))
     print('Testing: ', len(mask_test))
-    augment_data(img_train, mask_train, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\train", output_type="numpy", size= (512,512), augment=False)
-    augment_data(img_test, mask_test, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\test", output_type="numpy", size= (512,512), augment=False)
-    augment_data(img_val, mask_val, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\validation", output_type="numpy", size= (512,512), augment=False)
+    augment_data(img_train, mask_train, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\train", output_type="numpy", size= (512,512), augment=False)
+    augment_data(img_test, mask_test, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\test", output_type="numpy", size= (512,512), augment=False)
+    augment_data(img_val, mask_val, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\validation", output_type="numpy", size= (512,512), augment=False)
 
     print("---------------------------------------------------------------------------------")
     print("After augmentation..")
-    print('Training: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\train\\image")))
-    print('Validation: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\validation\\image")))
-    print('Testing: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\test\\image")))
+    print('Training: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\train\\image")))
+    print('Validation: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\validation\\image")))
+    print('Testing: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\test\\image")))

@@ -8,8 +8,7 @@ import random
 def main(config):
     cudnn.benchmark = True
     if config.model_type not in ['U_Net','R2U_Net','AttU_Net','R2AttU_Net']:
-        print('ERROR!! model_type should be selected in U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-        print('Your input for model_type was %s'%config.model_type)
+        print('ERROR! Choose the right model')
         return
 
     # Create directories if not exist
@@ -22,6 +21,8 @@ def main(config):
         os.makedirs(config.result_path)
     
     lr = random.random()*0.0005 + 0.0000005
+    print("Learning rate = ", lr)
+    lr = config.lr
     epoch = config.num_epochs
     decay_ratio = random.random()*0.8
     decay_epoch = int(epoch*decay_ratio)
@@ -29,27 +30,25 @@ def main(config):
     config.lr = lr
     config.num_epochs_decay = decay_epoch
 
+    print('Defined parameters')
     print(config)
         
     train_loader = get_loader(image_path=config.train_path,
                             image_size=config.image_size,
                             batch_size=config.batch_size,
                             num_workers=config.num_workers,
-                            mode='train',
-                            augmentation_prob=config.augmentation_prob)
+                            mode='train')
     valid_loader = get_loader(image_path=config.valid_path,
                             image_size=config.image_size,
                             batch_size=config.batch_size,
                             num_workers=config.num_workers,
-                            mode='valid',
-                            augmentation_prob=0.)
+                            mode='valid')
     test_loader = get_loader(image_path=config.test_path,
                             image_size=config.image_size,
                             batch_size=config.batch_size,
                             num_workers=config.num_workers,
-                            mode='test',
-                            augmentation_prob=0.)
-    print("Data loaded... ")
+                            mode='test')
+
     solver = Solver(config, train_loader, valid_loader, test_loader)
 
     
@@ -66,30 +65,25 @@ if __name__ == '__main__':
     
     # model hyper-parameters
     parser.add_argument('--image_size', type=int, default=256)
-    parser.add_argument('--t', type=int, default=3, help='t for Recurrent step of R2U_Net or R2AttU_Net')
-    
+    parser.add_argument('--t', type=int, default=3, help='t for Recurrent step of R2U_Net or R2AttU_Net')  
     # training hyper-parameters
     parser.add_argument('--img_ch', type=int, default=1)
     parser.add_argument('--output_ch', type=int, default=1)
     parser.add_argument('--num_epochs', type=int, default=100)
     parser.add_argument('--num_epochs_decay', type=int, default=70)
     parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--num_workers', type=int, default=8)
-    parser.add_argument('--lr', type=float, default=0.0002)
+    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--lr', type=float, default=0.0001)
     parser.add_argument('--beta1', type=float, default=0.5)        # momentum1 in Adam
     parser.add_argument('--beta2', type=float, default=0.999)      # momentum2 in Adam    
-    parser.add_argument('--augmentation_prob', type=float, default=0.4)
-
-    parser.add_argument('--log_step', type=int, default=2)
-    parser.add_argument('--val_step', type=int, default=2)
-
     # misc
     parser.add_argument('--mode', type=str, default='train')
+    parser.add_argument('--model_name', type=str, default='femoral_d_U_Net-150-0.0004-11-0.4000.pkl')
     parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
     parser.add_argument('--model_path', type=str, default='./models')
-    parser.add_argument('--train_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\train')
-    parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\validation')
-    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\test')
+    parser.add_argument('--train_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\doitfaster\\train')
+    parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\doitfaster\\validation')
+    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\TETE_FEMORALE_D\\doitfaster\\test')
     parser.add_argument('--result_path', type=str, default='./result/')
 
     parser.add_argument('--cuda_idx', type=int, default=1)
