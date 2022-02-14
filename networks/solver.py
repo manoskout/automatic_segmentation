@@ -24,7 +24,6 @@ class Solver(object):
 		self.img_ch = config.img_ch
 		self.output_ch = config.output_ch
 		self.criterion = DiceBCELoss()
-		self.augmentation_prob = config.augmentation_prob
 		self.min_valid_loss = np.inf	
 		self.model_name = config.model_name				
 
@@ -39,10 +38,6 @@ class Solver(object):
 		self.num_epochs_decay = config.num_epochs_decay
 		self.batch_size = config.batch_size
 		
-		# Step size
-		self.log_step = config.log_step
-		self.val_step = config.val_step
-
 		# Path
 		self.model_path = config.model_path
 		self.result_path = config.result_path
@@ -103,12 +98,11 @@ class Solver(object):
 		"""
 		unet_path = os.path.join(
 			self.model_path, 
-			'%s-%d-%.4f-%d-%.4f.pkl'%(
+			'%s-%d-%.4f-%d.pkl'%(
 				self.model_type,
 				self.num_epochs,
 				self.lr,
 				self.num_epochs_decay,
-				self.augmentation_prob
 				)
 		)
 		
@@ -116,7 +110,7 @@ class Solver(object):
 		self.unet.eval()
 		length = 0 
 		num_val_batches = len(self.valid_loader)		
-		
+		hd_distance = HausdorffDistance()
 		for (image, true_mask) in tqdm(
 			self.valid_loader, 
 			total = num_val_batches, 
@@ -133,7 +127,7 @@ class Solver(object):
 			length += image.size(0)/self.batch_size
 		self.unet.train()
 		dice_c = dice_coeff(pred_mask,true_mask)
-
+		hausdorff = hd_distance.compute(pred_mask,true_mask)
 		# Save the prediction
 		self.save_validation_results(image, pred_mask, true_mask,epoch)
 		if self.min_valid_loss > valid_loss:
@@ -143,7 +137,7 @@ class Solver(object):
 			torch.save(self.unet.state_dict(), unet_path)
 		
 		writer.add_scalar("val_mean_dice", dice_c, epoch + 1)
-		return dice_c,valid_loss
+		return dice_c,valid_loss,hausdorff
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
@@ -152,13 +146,11 @@ class Solver(object):
 		
 		unet_path = os.path.join(
 			self.model_path, 
-			'%s-%d-%.4f-%d-%.4f.pkl' %(
+			'%s-%d-%.4f-%d.pkl' %(
 				self.model_type,
 				self.num_epochs,
 				self.lr,
-				self.num_epochs_decay,
-				self.augmentation_prob
-				)
+				self.num_epochs_decay				)
 			)
 
 		training_log = open(
@@ -196,7 +188,7 @@ class Solver(object):
 			n_train = len(self.train_loader)
 			global_step = 0
 			writer = SummaryWriter()
-
+			hd_distance = HausdorffDistance()
 			# print("n_train: ",n_train)
 			for epoch in range(self.num_epochs):
 
@@ -229,7 +221,7 @@ class Solver(object):
 						pbar.update(int(images.shape[0]/self.batch_size))
 						global_step +=1
 						epoch_loss += loss.item()
-
+						hausdorff = hd_distance.compute(pred_mask,true_masks)
 						dice_c += dice_coeff(pred_mask,true_masks)
 						length += images.size(0)/self.batch_size
 						writer.add_scalar("train_loss", loss.item(), self.num_epochs*epoch + step)
@@ -240,13 +232,9 @@ class Solver(object):
 				dice_c = dice_c/length
 
 				# Print the log info
-				print('Epoch [%d/%d], Loss: %.4f, \n[Training] DC: %.4f' % (
-					  epoch+1, self.num_epochs,
-					  epoch_loss/n_train,
-					  dice_c)
-					)
+				print(f'Epoch [{epoch+1}/{self.num_epochs}], Loss: {epoch_loss/n_train}, \n[Training] DC: {dice_c} Hausdorff : {hausdorff}')
 				# Update csv
-				wr_train.writerow([epoch+1,self.lr,epoch_loss/n_train, dice_c])
+				wr_train.writerow([epoch+1,self.lr,epoch_loss/n_train, dice_c, hausdorff])
 
 				# Decay learning rate
 				if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
@@ -262,9 +250,9 @@ class Solver(object):
 				if division_step > 0:
 					if global_step % division_step == 0:	
 						self.unet.train(False)
-						dice_c, valid_loss = self.evaluation(epoch, writer)
-				print('[Validation] --> DC: %.4f, Loss: %.4f'%(dice_c,valid_loss))
-				wr_valid.writerow([epoch+1,self.lr,valid_loss, dice_c])
+						dice_c, valid_loss, hausdorff = self.evaluation(epoch, writer)
+				print(f'[Validation] --> DC: {dice_c}, Loss: {valid_loss}, Hausdorff: {hausdorff}')
+				wr_valid.writerow([epoch+1,self.lr,valid_loss, dice_c, hausdorff])
 
 
 			training_log.close()
@@ -274,6 +262,17 @@ class Solver(object):
 
 	#===================================== Test ====================================#
 	def test(self,):
+		testing_log = open(
+			os.path.join(
+				self.result_path,
+				'result_testing.csv'
+			), 
+			'a', 
+			encoding='utf-8', 
+			newline=''
+		)
+		wr_test = csv.writer(testing_log)
+
 		unet_path = os.path.join(self.model_path, self.model_name)
 		del self.unet
 		self.build_model()
@@ -281,20 +280,17 @@ class Solver(object):
 			# Load the pretrained Encoder
 			self.unet.load_state_dict(torch.load(unet_path))
 			print('%s is Successfully Loaded from %s'%(self.model_type,unet_path))
-	# self.unet.train(False)
 		self.unet.eval()
 		test_len = len(self.test_loader)
-	# DC = 0.		# Dice Coefficient
+		hd_distance = HausdorffDistance()
+
 		for i, (images, true_masks) in enumerate(self.test_loader):
 
 			images = images.to(self.device)
 			true_masks = true_masks.to(self.device)
 			pred_masks = self.unet(images)
-			print(dice_coeff(pred_masks,true_masks))
+			dc = dice_coeff(pred_masks,true_masks)
+			hausdorff = hd_distance(pred_masks,true_masks)
+			wr_test.writerow([i, dc, hausdorff])
 
-		
 			self.save_validation_results(images, pred_masks, true_masks,test_len-i)
-
-
-
-			

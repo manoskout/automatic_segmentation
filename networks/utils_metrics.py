@@ -2,9 +2,10 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
-
+import numpy as np
 # SR : Segmentation Result
 # GT : Ground Truth
+from scipy.ndimage.morphology import distance_transform_edt as edt
 
 def get_accuracy(SR,GT,threshold=0.5):
     SR = SR > threshold
@@ -77,21 +78,6 @@ def fi_score(targets:torch.Tensor, inputs:torch.Tensor) -> torch.Tensor:
     return f1
 
 
-def jaccard_score(preds, inputs):
-    inputs = inputs.view(-1)
-    preds = preds.view(-1)
-
-    # Ignore IoU for background class ("0")
-    # for cls in xrange(1, n_classes):  # This goes from 1:n_classes-1 -> class "0" is ignored
-    # pred_inds = targets == cls
-    # target_inds = target == cls
-    intersection = preds.sum()  # Cast to long to prevent overflows
-    union = preds.sum() + inputs.sum() - intersection
-    if union == 0:
-        iou = float('nan')  # If there is no ground truth, do not include in evaluation
-    else:
-        iou = float(intersection) / float(max(union, 1))
-    return iou
 
 def dice_coeff(inputs: Tensor, targets: Tensor, smooth=1):
 #comment out if your model contains a sigmoid or equivalent activation layer
@@ -129,3 +115,31 @@ class DiceBCELoss(nn.Module):
         
         return Dice_BCE
 
+class HausdorffDistance:
+    def hd_distance(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+
+        if np.count_nonzero(x) == 0 or np.count_nonzero(y) == 0:
+            return np.array([np.Inf])
+
+        indexes = np.nonzero(x)
+        distances = edt(np.logical_not(y))
+
+        return np.array(np.max(distances[indexes]))
+
+    def compute(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        assert (
+            pred.shape[1] == 1 and target.shape[1] == 1
+        ), "Only binary channel supported"
+
+        pred = (pred > 0.5).byte()
+        target = (target > 0.5).byte()
+
+        right_hd = torch.from_numpy(
+            self.hd_distance(pred.cpu().numpy(), target.cpu().numpy())
+        ).float()
+
+        left_hd = torch.from_numpy(
+            self.hd_distance(target.cpu().numpy(), pred.cpu().numpy())
+        ).float()
+        print(torch.max(right_hd, left_hd))
+        return torch.max(right_hd, left_hd).item()
