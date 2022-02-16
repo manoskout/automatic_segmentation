@@ -2,86 +2,26 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 # SR : Segmentation Result
 # GT : Ground Truth
-from scipy.ndimage.morphology import distance_transform_edt as edt
 
-def get_accuracy(SR,GT,threshold=0.5):
-    SR = SR > threshold
-    GT = GT == torch.max(GT)
-    corr = torch.sum(SR==GT)
-    tensor_size = SR.size(0)*SR.size(1)*SR.size(2)*SR.size(3)
-    acc = float(corr)/float(tensor_size)
+def collect_metrics(targets: Tensor, predicted: Tensor, num_classes = 1, eps=1e-5):
+    tp = torch.sum(predicted * targets).item() # TP
+    fp = torch.sum(predicted * (1 - targets)).item()  # FP
+    fn = torch.sum((1 - predicted) * targets).item()  # FN
+    tn = torch.sum((1 - predicted) * (1 - targets)).item() # TN
+    precision = (tp + eps) / (tp + fp + eps)
+    recall = (tp + eps) / (tp + fn + eps)
+    specificity = (tn + eps) / (tn + fp + eps)
+    f1 = 2*(precision*recall)/(precision+recall)
+    dice_c = dice_coeff(targets, predicted)
+    iou = jaccard_index(targets,predicted)
+    # print(recall, precision, f1, specificity, dice_c.item(), iou.item() )
 
-    return acc
-
-def get_specificity(SR,GT,threshold=0.5):
-    SR = SR > threshold
-    GT = GT == torch.max(GT)
-
-    # TN : True Negative
-    # FP : False Positive
-    TN = ((SR==0)+(GT==0))==2
-    FP = ((SR==1)+(GT==0))==2
-
-    SP = float(torch.sum(TN))/(float(torch.sum(TN+FP)) + 1e-6)
-    
-    return SP
-
-def recall(inputs: Tensor, targets: Tensor) -> float:
-    """
-    """
-    tp = (inputs * targets).sum().to(torch.float32)
-    fn = (inputs * (1 - targets)).sum().to(torch.float32)
-    epsilon = 1e-7
-    return tp / (tp + fn + epsilon)
-
-def precision(inputs: Tensor, targets: Tensor) -> float:
-    """
-    """
-    tp = (inputs * targets).sum().to(torch.float32)
-    fp = ((1 - inputs) * targets).sum().to(torch.float32)
-    epsilon = 1e-7
-    return tp / (tp+fp + epsilon)
-
-def fi_score(targets:torch.Tensor, inputs:torch.Tensor) -> torch.Tensor:
-    '''Calculate F1 score. Can work with gpu tensors
-    
-    The original implmentation is written by Michal Haltuf on Kaggle.
-    
-    Returns
-    -------
-    torch.Tensor
-        `ndim` == 1. 0 <= val <= 1
-    
-    Reference
-    ---------
-    - https://www.kaggle.com/rejpalcz/best-loss-function-for-f1-score-metric
-    - https://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html#sklearn.metrics.f1_score
-    - https://discuss.pytorch.org/t/calculating-precision-recall-and-f1-score-in-case-of-multi-label-classification/28265/6
-    
-    '''
-    # assert inputs.ndim == 1
-    # assert targets.ndim == 1 or targets.ndim == 2
-    
-    # if targets.ndim == 2:
-    #     targets = targets.argmax(dim=1)
-        
-    
-    # precision = precision(inputs, targets)
-    # recall = recall(inputs,targets)
-    # epsilon = 1e-7
-
-    # f1 = 2* (precision*recall) / (precision + recall + epsilon)
-    f1 =0
-    return f1
-
-
-
+    return recall, precision, f1, specificity, dice_c.item(), iou.item() 
 def dice_coeff(inputs: Tensor, targets: Tensor, smooth=1):
 #comment out if your model contains a sigmoid or equivalent activation layer
-    inputs = torch.sigmoid(inputs)       
+    targets = torch.sigmoid(targets) 
     
     #flatten label and prediction tensors
     inputs = inputs.view(-1)
@@ -92,6 +32,15 @@ def dice_coeff(inputs: Tensor, targets: Tensor, smooth=1):
 
     return dice_value
 
+def jaccard_index(inputs: Tensor, targets: Tensor, smooth=1):
+    targets = torch.sigmoid(targets) 
+    #flatten label and prediction tensors
+    inputs = inputs.view(-1)
+    targets = targets.view(-1)
+    intersection = (inputs * targets).sum()                            
+    total = (inputs + targets).sum()
+    union = total - intersection
+    return (intersection + smooth)/(union + smooth)
 
 
 #PyTorch
@@ -114,32 +63,3 @@ class DiceBCELoss(nn.Module):
         Dice_BCE = BCE + dice_loss
         
         return Dice_BCE
-
-class HausdorffDistance:
-    def hd_distance(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-
-        if np.count_nonzero(x) == 0 or np.count_nonzero(y) == 0:
-            return np.array([np.Inf])
-
-        indexes = np.nonzero(x)
-        distances = edt(np.logical_not(y))
-
-        return np.array(np.max(distances[indexes]))
-
-    def compute(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        assert (
-            pred.shape[1] == 1 and target.shape[1] == 1
-        ), "Only binary channel supported"
-
-        pred = (pred > 0.5).byte()
-        target = (target > 0.5).byte()
-
-        right_hd = torch.from_numpy(
-            self.hd_distance(pred.cpu().numpy(), target.cpu().numpy())
-        ).float()
-
-        left_hd = torch.from_numpy(
-            self.hd_distance(target.cpu().numpy(), pred.cpu().numpy())
-        ).float()
-        print(torch.max(right_hd, left_hd))
-        return torch.max(right_hd, left_hd).item()

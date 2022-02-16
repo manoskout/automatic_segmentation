@@ -22,7 +22,7 @@ def main(config):
     
     lr = random.random()*0.0005 + 0.0000005
     print("Learning rate = ", lr)
-    lr = config.lr
+    config.lr = lr
     epoch = config.num_epochs
     decay_ratio = random.random()*0.8
     decay_epoch = int(epoch*decay_ratio)

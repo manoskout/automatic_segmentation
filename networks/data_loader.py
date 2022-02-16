@@ -81,7 +81,7 @@ class ImageFolder(data.Dataset):
 		if self.mode == "test":
 			image = resize_with_padding(image, new_image_size=self.image_size)
 			GT =resize_with_padding(GT, new_image_size=self.image_size)
-		elif self.mode == "train":
+		else:
 			image = cv.resize(image,self.image_size)
 			GT = cv.resize(GT,self.image_size)
 

@@ -5,7 +5,7 @@ import torch
 torch.cuda.empty_cache()
 import torchvision
 from torch import optim
-from utils_metrics import *
+from utils_metrics import DiceBCELoss, collect_metrics
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
 from tqdm import tqdm
@@ -93,9 +93,10 @@ class Solver(object):
 			)
 		)
 		
-	def evaluation(self,epoch, writer):
+	def evaluation(self):
 		"""
 		"""
+		self.unet.train(False)
 		unet_path = os.path.join(
 			self.model_path, 
 			'%s-%d-%.4f-%d.pkl'%(
@@ -106,11 +107,10 @@ class Solver(object):
 				)
 		)
 		
-		valid_loss =0
+		valid_loss = length = 0
 		self.unet.eval()
-		length = 0 
-		num_val_batches = len(self.valid_loader)		
-		hd_distance = HausdorffDistance()
+		num_val_batches = len(self.valid_loader)
+		recall = precision = f1 = specificity = dice_c = iou = 0.		
 		for (image, true_mask) in tqdm(
 			self.valid_loader, 
 			total = num_val_batches, 
@@ -123,21 +123,85 @@ class Solver(object):
 			with torch.no_grad():		
 				pred_mask = self.unet(image)
 				loss = self.criterion(pred_mask,true_mask)
-				valid_loss = loss.item() * (image.size(0)/self.batch_size)
+				valid_loss += loss.item() * (image.size(0)/self.batch_size)
+			_recall, _precision, _f1, _specificity, _dice_c, _iou =  collect_metrics(true_mask,pred_mask)
+			recall+=_recall
+			precision+=_precision
+			f1+=_f1
+			specificity += _specificity
+			dice_c += _dice_c
+			iou+=_iou
 			length += image.size(0)/self.batch_size
+			
 		self.unet.train()
-		dice_c = dice_coeff(pred_mask,true_mask)
-		hausdorff = hd_distance.compute(pred_mask,true_mask)
+		dice_c = dice_c/length
+		recall = recall/length
+		precision = precision/length
+		f1 = f1/length
+		iou = iou/length
+		specificity = specificity/length
+		valid_loss = valid_loss/length
 		# Save the prediction
-		self.save_validation_results(image, pred_mask, true_mask,epoch)
+		self.save_validation_results(image, pred_mask, true_mask,self.epoch)
 		if self.min_valid_loss > valid_loss:
 			print(f'[Validation] Loss Decreased({self.min_valid_loss:.6f}--->{valid_loss:.6f}) \t Saving The Model')
 			self.min_valid_loss = valid_loss
 			# Saving State Dict
 			torch.save(self.unet.state_dict(), unet_path)
-		
-		writer.add_scalar("val_mean_dice", dice_c, epoch + 1)
-		return dice_c,valid_loss,hausdorff
+		print(f'[Validation] --> Loss: {valid_loss} DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, F1: {f1}, IoU: {iou}')
+		self.wr_valid.writerow([self.epoch+1,self.lr, valid_loss, recall, precision, f1, specificity, dice_c, iou])
+	
+	def train_epoch(self):
+		self.unet.train(True)
+		epoch_loss = length = 0
+		recall = specificity = precision = f1 = dice_c = iou = valid_loss = 0.	
+		epoch_loss_values = list()
+		with tqdm(total=self.n_train, desc=f'Epoch {self.epoch + 1}/{self.num_epochs}', unit='img') as pbar:
+			for i, (images, true_masks) in enumerate(self.train_loader):
+				images = images.to(self.device,dtype=torch.float32)
+				true_masks = true_masks.to(self.device, dtype=torch.float32)
+
+				assert images.shape[1] == self.img_ch, \
+			f'Network has been defined with {self.img_ch} input channels'
+				self.optimizer.zero_grad(set_to_none=True)
+				# with torch.cuda.amp.autocast(enabled=self.amp):
+				pred_mask = self.unet(images)
+				loss = self.criterion(pred_mask,true_masks)
+
+				# Backprop + optimize
+				loss.backward()
+				self.optimizer.step()
+
+				pbar.update(int(images.shape[0]/self.batch_size))
+				self.global_step +=1
+				epoch_loss += loss.item()
+				_recall, _precision, _f1, _specificity, _dice_c, _iou =  collect_metrics(true_masks,pred_mask)
+				recall+=_recall
+				precision+=_precision
+				f1+=_f1
+				specificity += _specificity
+				dice_c += _dice_c
+				iou+=_iou
+				length += images.size(0)/self.batch_size
+
+				# print(f'Length: {length}Loss: {epoch_loss/n_train}, \n[Training] DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, F1: {f1}, IoU: {iou}')
+
+				# writer.add_scalar("train_loss", loss.item(), self.num_epochs*epoch + length)
+				pbar.set_postfix(**{'loss (batch)': loss.item()})
+			epoch_loss /=length
+			epoch_loss_values.append(epoch_loss)
+
+		dice_c = dice_c/length
+		recall = recall/length
+		precision = precision/length
+		f1 = f1/length
+		iou = iou/length
+		specificity = specificity/length
+
+		# Print the log info
+		print(f'Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {epoch_loss}, \n[Training] DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, F1: {f1}, IoU: {iou}')
+		# Update csv
+		self.wr_train.writerow([self.epoch+1,self.lr,epoch_loss, recall, precision, f1, specificity, dice_c, iou])
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
@@ -150,9 +214,8 @@ class Solver(object):
 				self.model_type,
 				self.num_epochs,
 				self.lr,
-				self.num_epochs_decay				)
+				self.num_epochs_decay)
 			)
-
 		training_log = open(
 			os.path.join(
 				self.result_path,
@@ -172,8 +235,8 @@ class Solver(object):
 			newline=''
 		)
 
-		wr_train = csv.writer(training_log)
-		wr_valid = csv.writer(validation_log)
+		self.wr_train = csv.writer(training_log)
+		self.wr_valid = csv.writer(validation_log)
 		
 
 		# U-Net Train
@@ -183,59 +246,14 @@ class Solver(object):
 			print('%s is Successfully Loaded from %s'%(self.model_type,unet_path))
 		else:
 			print("The training process starts...")
-			# Train for Encoder
 			lr = self.lr
-			n_train = len(self.train_loader)
-			global_step = 0
+			self.n_train = len(self.train_loader)
+			self.global_step = 0
 			writer = SummaryWriter()
-			hd_distance = HausdorffDistance()
 			# print("n_train: ",n_train)
 			for epoch in range(self.num_epochs):
-
-				self.unet.train(True)
-				epoch_loss = 0
-				dice_c = 0.	
-				length = 0
-				step = 0
-				epoch_loss_values = list()
-				with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{self.num_epochs}', unit='img') as pbar:
-					for i, (images, true_masks) in enumerate(self.train_loader):
-						step+=1
-						images = images.to(self.device,dtype=torch.float32)
-						true_masks = true_masks.to(self.device, dtype=torch.float32)
-
-						assert images.shape[1] == self.img_ch, \
-                    f'Network has been defined with {self.img_ch} input channels'
-						
-						with torch.cuda.amp.autocast(enabled=self.amp):
-							pred_mask = self.unet(images)
-							loss = self.criterion(pred_mask,true_masks)
-						
-
-						# Backprop + optimize
-						self.optimizer.zero_grad(set_to_none=True)
-						self.grad_scaler.scale(loss).backward()
-						self.grad_scaler.step(self.optimizer)
-						self.grad_scaler.update()
-
-						pbar.update(int(images.shape[0]/self.batch_size))
-						global_step +=1
-						epoch_loss += loss.item()
-						hausdorff = hd_distance.compute(pred_mask,true_masks)
-						dice_c += dice_coeff(pred_mask,true_masks)
-						length += images.size(0)/self.batch_size
-						writer.add_scalar("train_loss", loss.item(), self.num_epochs*epoch + step)
-						pbar.set_postfix(**{'loss (batch)': loss.item()})
-					epoch_loss /=step
-					epoch_loss_values.append(epoch_loss)
-
-				dice_c = dice_c/length
-
-				# Print the log info
-				print(f'Epoch [{epoch+1}/{self.num_epochs}], Loss: {epoch_loss/n_train}, \n[Training] DC: {dice_c} Hausdorff : {hausdorff}')
-				# Update csv
-				wr_train.writerow([epoch+1,self.lr,epoch_loss/n_train, dice_c, hausdorff])
-
+				self.epoch = epoch
+				self.train_epoch()
 				# Decay learning rate
 				if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
 					lr -= (self.lr / float(self.num_epochs_decay))
@@ -245,16 +263,10 @@ class Solver(object):
 				
 				
 				#===================================== Validation ====================================#
-				dice_c = 0
-				division_step = (n_train // (10 * self.batch_size))
+				division_step = (self.n_train // (10 * self.batch_size))
 				if division_step > 0:
-					if global_step % division_step == 0:	
-						self.unet.train(False)
-						dice_c, valid_loss, hausdorff = self.evaluation(epoch, writer)
-				print(f'[Validation] --> DC: {dice_c}, Loss: {valid_loss}, Hausdorff: {hausdorff}')
-				wr_valid.writerow([epoch+1,self.lr,valid_loss, dice_c, hausdorff])
-
-
+					if self.global_step % division_step == 0:	
+						self.evaluation()
 			training_log.close()
 			validation_log.close()
 			writer.close
@@ -282,15 +294,13 @@ class Solver(object):
 			print('%s is Successfully Loaded from %s'%(self.model_type,unet_path))
 		self.unet.eval()
 		test_len = len(self.test_loader)
-		hd_distance = HausdorffDistance()
 
 		for i, (images, true_masks) in enumerate(self.test_loader):
 
 			images = images.to(self.device)
 			true_masks = true_masks.to(self.device)
 			pred_masks = self.unet(images)
-			dc = dice_coeff(pred_masks,true_masks)
-			hausdorff = hd_distance(pred_masks,true_masks)
-			wr_test.writerow([i, dc, hausdorff])
+			# dc = dice_coeff(pred_masks,true_masks)
+			# wr_test.writerow([i, dc])
 
-			self.save_validation_results(images, pred_masks, true_masks,test_len-i)
+			# self.save_validation_results(images, pred_masks, true_masks,test_len-i)
