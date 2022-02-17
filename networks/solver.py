@@ -149,7 +149,8 @@ class Solver(object):
 			# Saving State Dict
 			torch.save(self.unet.state_dict(), unet_path)
 		print(f'[Validation] --> Loss: {valid_loss} DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, F1: {f1}, IoU: {iou}')
-		self.wr_valid.writerow([self.epoch+1,self.lr, valid_loss, recall, precision, f1, specificity, dice_c, iou])
+		# self.wr_valid.writerow([self.epoch+1,self.lr, valid_loss, recall, precision, f1, specificity, dice_c, iou])
+		self.wr_valid.writerow([self.epoch+1,self.lr, valid_loss, dice_c, iou])
 	
 	def train_epoch(self):
 		self.unet.train(True)
@@ -201,7 +202,8 @@ class Solver(object):
 		# Print the log info
 		print(f'Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {epoch_loss}, \n[Training] DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, F1: {f1}, IoU: {iou}')
 		# Update csv
-		self.wr_train.writerow([self.epoch+1,self.lr,epoch_loss, recall, precision, f1, specificity, dice_c, iou])
+		# self.wr_train.writerow([self.epoch+1,self.lr,epoch_loss, recall, precision, f1, specificity, dice_c, iou])
+		self.wr_train.writerow([self.epoch+1,self.lr,epoch_loss, dice_c, iou])
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
