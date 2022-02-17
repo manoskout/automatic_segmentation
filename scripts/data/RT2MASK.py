@@ -272,7 +272,8 @@ def clean_existed_masks(dataset_path, mask_folder_name):
 
 
 DATASET_PATH = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset"
-PATIENT_FOLDERS = get_patient_folder_list(DATASET_PATH)
+PATIENT_FOLDERS = [patient for patient in get_patient_folder_list(DATASET_PATH) if "MASKS" not in os.listdir(patient)]
+# print(PATIENT_FOLDERS)
 doubled_rt_structs=[]
 patient_with_doubled_rt = []
 for patient_path in PATIENT_FOLDERS:

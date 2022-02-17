@@ -66,7 +66,6 @@ def create_organ_dataset(dataset_path, organ,save_as_dicom):
         for folder in os.listdir(mask_path):
             if folder in organ:
                 organ_folder = os.path.join(mask_path,folder)
-                print(folder)
                 for img in os.listdir(organ_folder):
                     if ".png" in img: # That means it is a mask
                         dst_path = os.path.join(ORGAN_MASK_PATH,img)

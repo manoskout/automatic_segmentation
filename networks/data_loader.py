@@ -61,7 +61,11 @@ class ImageFolder(data.Dataset):
 		filename = os.path.basename(image_path)
 		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + 'mask.png')
 		to_tensor = T.Compose([
-			T.ToTensor()
+			T.ToTensor(),
+			T.Normalize(
+				mean=[0.485, 0.456, 0.406],
+				std=[0.229, 0.224, 0.225]
+			)
 		])
 
 		# image = Image.open(image_path)

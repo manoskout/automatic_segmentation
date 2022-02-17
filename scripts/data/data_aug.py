@@ -46,7 +46,7 @@ def augment_data(images, masks, existed_imgs, existed_masks, save_path, size= (5
             x2 = augmented["image"]
             y2 = augmented["mask"]
 
-            aug = Rotate(limit=45, p=0.5)
+            aug = Rotate(limit=10, p=0.5)
             augmented = aug(image=x, mask=y)
             x3 = augmented["image"]
             y3 = augmented["mask"]
