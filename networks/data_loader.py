@@ -62,10 +62,10 @@ class ImageFolder(data.Dataset):
 		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + 'mask.png')
 		to_tensor = T.Compose([
 			T.ToTensor(),
-			T.Normalize(
-				mean=[0.485, 0.456, 0.406],
-				std=[0.229, 0.224, 0.225]
-			)
+			# T.Normalize(
+			# 	mean=[0.485, 0.456, 0.406],
+			# 	std=[0.229, 0.224, 0.225]
+			# )
 		])
 
 		# image = Image.open(image_path)
@@ -82,12 +82,12 @@ class ImageFolder(data.Dataset):
 		GT = GT/np.max(GT)
 		GT = GT > 0.5
 		GT = GT.astype(np.float32)		
-		if self.mode == "test":
-			image = resize_with_padding(image, new_image_size=self.image_size)
-			GT =resize_with_padding(GT, new_image_size=self.image_size)
-		else:
-			image = cv.resize(image,self.image_size)
-			GT = cv.resize(GT,self.image_size)
+		# if self.mode == "test":
+		image = resize_with_padding(image, new_image_size=self.image_size)
+		GT =resize_with_padding(GT, new_image_size=self.image_size)
+		# else:
+			# image = cv.resize(image,self.image_size)
+			# GT = cv.resize(GT,self.image_size)
 
 		
 		image = np.expand_dims(image, axis=-1)

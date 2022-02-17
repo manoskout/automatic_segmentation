@@ -98,7 +98,7 @@ class Solver(object):
 		"""
 		self.unet.train(False)
 		unet_path = os.path.join(
-			self.model_path, 
+			self.model_path,
 			'%s-%d-%.4f-%d.pkl'%(
 				self.model_type,
 				self.num_epochs,

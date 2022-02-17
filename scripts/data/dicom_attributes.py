@@ -35,9 +35,10 @@ PATIENT_FOLDERS = get_patient_folder_list(DATASET_PATH)
 prev_mri = []
 new_mri = []
 for patient in PATIENT_FOLDERS:
-    for folder in os.listdir(patient):
-        if "MR" in folder:
-            prev_mri.append(os.path.join(patient,folder))
-        elif "ScalarVolume" in folder:
-            new_mri.append(os.path.join(patient,folder))
+    if "018_PRO" in patient:
+        for folder in os.listdir(patient):
+            if "MR" in folder:
+                prev_mri.append(os.path.join(patient,folder))
+            elif "ScalarVolume" in folder:
+                new_mri.append(os.path.join(patient,folder))
 update_attributes(prev_mri, new_mri)
