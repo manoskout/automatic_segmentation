@@ -5,35 +5,111 @@ from torchvision import transforms as T
 from torchvision.transforms import functional as F
 import pydicom as dicom
 import cv2 as cv
+import matplotlib.pyplot as plt
+def crop_and_pad(img, cropx, cropy, display=False):
+    h, w = img.shape
+    starty = startx = 0
+    # print('Input: ',img.shape)
+    
+    # Crop only if the crop size is smaller than image size
+    if cropy <= h:   
+        starty = h//2-(cropy//2)    
+        
+    if cropx <= w:
+        startx = w//2-(cropx//2)
+        
+    cropped_img = img[starty:starty+cropy,startx:startx+cropx]
+    # print('Cropped: ',cropped_img.shape)
+    
+    # Add padding, if the image is smaller than the desired dimensions
+    old_image_height, old_image_width = cropped_img.shape
+    new_image_height, new_image_width = old_image_height, old_image_width
+    
+    if old_image_height < cropy:
+        new_image_height = cropy
+    if old_image_width < cropy:
+        new_image_width = cropy
+    
+    if (old_image_height != new_image_height) or (old_image_width != new_image_width):
+    
+        padded_img = np.full((new_image_height, new_image_width), 0, dtype=np.float32)
+    
+        x_center = (new_image_height - old_image_width) // 2
+        y_center = (new_image_width - old_image_height) // 2
+        
+        padded_img[y_center:y_center+old_image_height, x_center:x_center+old_image_width] = cropped_img
+        
+        # print('Padded: ',padded_img.shape)
+        result = padded_img
+    else:
+        result = cropped_img
+        
+    # print('Result: ',result.shape)
+        
+    if display:
+        plt.figure()
+        plt.subplot(131, title='before cropping')
+        plt.imshow(img, cmap='gray')
+        plt.subplot(132, title='after cropping')
+        plt.imshow(result, cmap='gray')
+        # plt.subplot(133, title='resizing to original')
+        # plt.imshow(resizing_func(x, image.shape[0], image.shape[1]), cmap='gray')
+        plt.show()
+        
+    return result
 
-def resize_with_padding(img, new_image_size=(512, 512),color=(0,0,0)):
-	"""
-	This function used in order to keep the geometry of the image the same during the resize method.
-	"""
-	if len(img.shape)==2:
-		# The image is grayscaled
-		# print("The image is grayscaled")
-		old_image_height, old_image_width = img.shape
-
-		# try:
-		result = np.full(new_image_size, 0, dtype=img.dtype)
-		# # compute center offset
-		x_center = (new_image_size[0] - old_image_width) // 2
-		y_center = (new_image_size[1] - old_image_height) // 2
-
-		
-	elif len(img.shape)==3:
-		old_image_height, old_image_width, channels = img.shape
-
-		# try:
-		result = np.full(new_image_size, color, dtype=img.dtype)
-		# # compute center offset
-		x_center = (new_image_size[0] - old_image_width) // 2
-		y_center = (new_image_size[1] - old_image_height) // 2
-
-	# # copy img image into center of result image
-	result[y_center:y_center+old_image_height, x_center:x_center+old_image_width] = img
-	return result
+def crop_and_pad(img,size, display=False):
+    cropx, cropy = size,size
+    h, w = img.shape
+    starty = startx = 0
+    print('Input: ',img.shape)
+    
+    # Crop only if the crop size is smaller than image size
+    if cropy <= h:   
+        starty = h//2-(cropy//2)    
+        
+    if cropx <= w:
+        startx = w//2-(cropx//2)
+        
+    cropped_img = img[starty:starty+cropy,startx:startx+cropx]
+    # print('Cropped: ',cropped_img.shape)
+    
+    # Add padding, if the image is smaller than the desired dimensions
+    old_image_height, old_image_width = cropped_img.shape
+    new_image_height, new_image_width = old_image_height, old_image_width
+    
+    if old_image_height < cropy:
+        new_image_height = cropy
+    if old_image_width < cropy:
+        new_image_width = cropy
+    
+    if (old_image_height != new_image_height) or (old_image_width != new_image_width):
+    
+        padded_img = np.full((new_image_height, new_image_width), 0, dtype=np.float32)
+    
+        x_center = (new_image_height - old_image_width) // 2
+        y_center = (new_image_width - old_image_height) // 2
+        
+        padded_img[y_center:y_center+old_image_height, x_center:x_center+old_image_width] = cropped_img
+        
+        print('Padded: ',padded_img.shape)
+        result = padded_img
+    else:
+        result = cropped_img
+        
+    # print('Result: ',result.shape)
+        
+    if display:
+        plt.figure()
+        plt.subplot(121, title='before cropping')
+        plt.imshow(img, cmap='gray')
+        plt.subplot(122, title='after cropping')
+        plt.imshow(result, cmap='gray')
+        # plt.subplot(133, title='resizing to original')
+        # plt.imshow(resizing_func(x, image.shape[0], image.shape[1]), cmap='gray')
+        plt.show()
+        
+    return result
 
 class ImageFolder(data.Dataset):
 	def __init__(self, root,image_size=256,mode='train',augmentation_prob=0.4):
@@ -83,8 +159,9 @@ class ImageFolder(data.Dataset):
 		GT = GT > 0.5
 		GT = GT.astype(np.float32)		
 		# if self.mode == "test":
-		image = resize_with_padding(image, new_image_size=self.image_size)
-		GT =resize_with_padding(GT, new_image_size=self.image_size)
+		# Resize keeping the same geometry
+		image = crop_and_pad(image,self.image_size)
+		GT =crop_and_pad(GT, self.image_size)
 		# else:
 			# image = cv.resize(image,self.image_size)
 			# GT = cv.resize(GT,self.image_size)
