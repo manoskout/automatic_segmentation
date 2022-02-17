@@ -1,6 +1,7 @@
 # import os
 # from rt_utils import RTStructBuilder
-# import matplotlib.pyplot as plt
+import shutil
+import matplotlib.pyplot as plt
 # %matplotlib widget
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -10,7 +11,6 @@ import pydicom as dicom
 from pydicom import dcmread
 import numpy as np
 # import matplotlib.pyplot as plt
-from rt_utils import RTStructBuilder
 from PIL import Image
 from PIL import ImageDraw
 from pathlib import Path
@@ -212,7 +212,8 @@ class MaskBuilder:
               # print(index)          
             prev_index=index
           else:
-            print(f"Segmeng: {segment} has no attrubute : ContourImageSequence. Aborted")
+            # print(f"Segmeng: {segment} has no attrubute : ContourImageSequence. Aborted")
+            continue
           
           # print("Contour with id : {} is related to image {}".format(contour.ContourImageSequence[0].ReferencedSOPInstanceUID, str(index)))
     # mri_viewer.multi_slice_viewer(masks,slices_ms, "MASK", "MRI")
@@ -259,29 +260,38 @@ class MaskBuilder:
 #     mb.create_masks(roi)# Make it automatically (using args)
 #     mb.save_masks(roi)
 #     mb.clean_mask_data()
+def clean_existed_masks(dataset_path, mask_folder_name):
+  PATIENT_FOLDERS = get_patient_folder_list(dataset_path)
+  # Delete all the pre existed segments
+  for patient_path in PATIENT_FOLDERS:
+    prev_masks = (out for out in os.listdir(patient_path) if mask_folder_name in out)
+    for masks in prev_masks:
+      shutil.rmtree(os.path.join(patient_path,masks))
+      logging.info("[Delete] patient mask : {} deleted".format(masks))
 
 
-# DATASET_PATH = "/Volumes/Manos/automatic_segmentation/Test"
-# PATIENT_FOLDERS = get_patient_folder_list(DATASET_PATH)
-# doubled_rt_structs=[]
-# patient_with_doubled_rt = []
-# for patient_path in PATIENT_FOLDERS:
-#   patient = os.path.basename(patient_path)
-#   logging.info("Mask extraction for the patient: {} started".format(patient))
-#   mris, structs = (out for out in os.listdir(patient_path) if "MR" in out or "STRU" in out )
-#   mri_path = os.path.join(patient_path,mris)
-#   struct_path = os.path.join(patient_path,structs)
-#   series,rt_struct = load_dcm_rt_from_path(mri_path,struct_path)
-#   mb = MaskBuilder(DATASET_PATH,series, rt_struct)
-#   roi_names = mb.get_roi_names()
-#   for roi in roi_names:
-#     print(roi)
-#     mb.create_masks(roi)
-    # mb.save_masks(patient_path, roi)
-#         mb.clean_mask_data()
-#     print("----- For the patient {}".format(patient))
-#   print("--------------------------------NEXT-------------------------------------")  
-# print("--->> Patients that are not yet investigated because of multiple rt_struct: {} \nStruct Path: ".format(patient_with_doubled_rt,doubled_rt_structs)) 
+
+DATASET_PATH = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset"
+PATIENT_FOLDERS = get_patient_folder_list(DATASET_PATH)
+doubled_rt_structs=[]
+patient_with_doubled_rt = []
+for patient_path in PATIENT_FOLDERS:
+  patient = os.path.basename(patient_path)
+  logging.info("Mask extraction for the patient: {} started".format(patient))
+  mris, structs = (out for out in os.listdir(patient_path) if "ScalarVolume" in out or "STRU" in out )
+  mri_path = os.path.join(patient_path,mris)
+  struct_path = os.path.join(patient_path,structs)
+  series,rt_struct = load_dcm_rt_from_path(mri_path,struct_path)
+  mb = MaskBuilder(DATASET_PATH,series, rt_struct)
+  roi_names = mb.get_roi_names()
+  for roi in roi_names:
+    print(roi)
+    mb.create_masks(roi)
+    mb.save_masks(patient_path, roi)
+    mb.clean_mask_data()
+    print("----- For the patient {}".format(patient))
+  print("--------------------------------NEXT-------------------------------------")  
+print("--->> Patients that are not yet investigated because of multiple rt_struct: {} \nStruct Path: ".format(patient_with_doubled_rt,doubled_rt_structs)) 
     
 
 # Patients that are not yet investigated because of multiple rt_struct: ['054_PRO_pCT_CGFL', '058_PRO_pCT_CGFL', '060_PRO_pCT_CGFL', '061_PRO_pCT_CGFL'] 
