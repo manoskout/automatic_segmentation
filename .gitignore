@@ -6,4 +6,3 @@ networks/runs
 networks/plot_transforms.py
 notebooks/
 __pycache__/
-test.py

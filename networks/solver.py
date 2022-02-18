@@ -272,37 +272,3 @@ class Solver(object):
 			training_log.close()
 			validation_log.close()
 			writer.close
-
-
-	#===================================== Test ====================================#
-	def test(self,):
-		testing_log = open(
-			os.path.join(
-				self.result_path,
-				'result_testing.csv'
-			), 
-			'a', 
-			encoding='utf-8', 
-			newline=''
-		)
-		wr_test = csv.writer(testing_log)
-
-		unet_path = os.path.join(self.model_path, self.model_name)
-		del self.unet
-		self.build_model()
-		if os.path.isfile(unet_path):
-			# Load the pretrained Encoder
-			self.unet.load_state_dict(torch.load(unet_path))
-			print('%s is Successfully Loaded from %s'%(self.model_type,unet_path))
-		self.unet.eval()
-		test_len = len(self.test_loader)
-
-		for i, (images, true_masks) in enumerate(self.test_loader):
-
-			images = images.to(self.device)
-			true_masks = true_masks.to(self.device)
-			pred_masks = self.unet(images)
-			# dc = dice_coeff(pred_masks,true_masks)
-			# wr_test.writerow([i, dc])
-
-			# self.save_validation_results(images, pred_masks, true_masks,test_len-i)
