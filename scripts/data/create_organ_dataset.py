@@ -46,6 +46,7 @@ def mri_to_png(mri_file, png_file):
 def create_organ_dataset(dataset_path, organ,save_as_dicom):
     """
     """
+    counter=1
     ORGAN_PATH =os.path.join(dataset_path,organ[0])
     ORGAN_MASK_PATH = os.path.join(ORGAN_PATH,"MASK")
     ORGAN_MRI_PATH = os.path.join(ORGAN_PATH,"MRI")
@@ -65,6 +66,7 @@ def create_organ_dataset(dataset_path, organ,save_as_dicom):
 
         for folder in os.listdir(mask_path):
             if folder in organ:
+                counter+=1
                 organ_folder = os.path.join(mask_path,folder)
                 for img in os.listdir(organ_folder):
                     if ".png" in img: # That means it is a mask
@@ -84,12 +86,13 @@ def create_organ_dataset(dataset_path, organ,save_as_dicom):
                             mri_to_png(mri_file, png_file)
                             png_file.close()
                         organ_dcm_path.append(os.path.join(ORGAN_MRI_PATH,img))
+    print(F"Process finished. Patients with the {ORGAN[0]} --> {counter}")
     return organ_dcm_path, organ_mask_path
 
 
 DATASET_PATH = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\"
 PATIENTS_PATHS = [os.path.join(DATASET_PATH,i) for i in os.listdir(DATASET_PATH)]
 PATIENTS_MASK_PATHS = []
-ORGAN = ["RECTUM"]            
+ORGAN = ["PTV_PROSTATE"]            
 save_as_dicom = True
 create_organ_dataset(DATASET_PATH,ORGAN, save_as_dicom)
