@@ -18,6 +18,7 @@ class MultiSolver(object):
 	def __init__(self, config, train_loader, valid_loader, test_loader):
 
 		# Data loader
+		self.classes = config.classes.list
 		self.train_loader = train_loader
 		self.valid_loader = valid_loader
 		self.test_loader = test_loader

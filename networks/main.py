@@ -94,6 +94,9 @@ if __name__ == '__main__':
     parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\validation')
     parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\test')
     parser.add_argument('--result_path', type=str, default='./result/')
+    # To pass an list argument, you should type
+    # i.e. python main.py --classes RECTUM VESSIE TETE_FEMORALE_D TETE_FEMORALE_G
+    parser.add_argument('--classes', nargs="+", default=["RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"])
 
     parser.add_argument('--cuda_idx', type=int, default=1)
 
