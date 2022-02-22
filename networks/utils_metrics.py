@@ -365,7 +365,7 @@ class AverageMeter():
 		self.avg_specificity = 0
 		self.avg_sensitivity = 0
 		self.avg_recall = 0
-	def update(self,loss, n=1):
+	def update(self,loss,true_mask, pred_mask, n=1):
 		#  loss, iou, hausdorff, hd95, dice, specificity, sensitivity, recall
 		# self.val = val
 		recall, precision, specificity, sensitivity, dice, iou , hausdorff, hd95 =  collect_metrics(true_mask,pred_mask)

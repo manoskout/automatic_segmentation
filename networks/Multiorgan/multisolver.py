@@ -149,7 +149,7 @@ class MultiSolver(object):
 				pred_mask = self.unet(image)
 				loss = self.criterion(pred_mask,true_mask)
 				valid_loss += loss.item() * (image.size(0)/self.batch_size)
-			metrics.update(valid_loss, image_batch.size(0))
+			metrics.update(valid_loss, true_mask, pred_mask, image_batch.size(0))
 			
 		self.unet.train()
 
@@ -187,7 +187,7 @@ class MultiSolver(object):
 
 				pbar.update(int(images.shape[0]/self.batch_size))
 				self.global_step +=1
-				metrics.update(epoch_loss, image_batch.size(0))
+				metrics.update(epoch_loss, true_masks, pred_mask, image_batch.size(0))
 
 				pbar.set_postfix(**{'loss (batch)': loss.item()})
 			epoch_loss_values.append(metrics.avg_loss)
