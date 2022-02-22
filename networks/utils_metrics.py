@@ -101,7 +101,6 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, num_classes = 1, ep
     hausdorff_distance_95_v = hausdorff_distance_95(predicted,ground_truth)
     dice_c = dice(predicted,ground_truth)
     iou = jaccard(predicted,ground_truth)
-    # print(recall_v, precision_v, specificity_v,sensitivity_v, dice_c, iou )
 
     return recall_v, precision_v, specificity_v,sensitivity_v, dice_c, iou ,hausdorff_distance_v, hausdorff_distance_95_v
 
