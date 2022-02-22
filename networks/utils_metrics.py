@@ -10,6 +10,7 @@ def assert_shape(test, reference):
     assert test.shape == reference.shape, "Shape mismatch: {} and {}".format(
         test.shape, reference.shape)
 
+
 class ConfusionMatrix:
 
     def __init__(self, test=None, reference=None):
@@ -332,3 +333,69 @@ class LogCoshDiceLoss(nn.Module):   # PROBLEMATIC
             (torch.exp(dice)+torch.exp(-dice)) / 2.0
         )
         return log_cosh_dice
+
+
+class AverageMeter():
+	def __init__(self):
+		self.reset()
+	def reset(self):
+		self.loss = 0
+		self.iou = 0
+		self.hausdorff = 0
+		self.hd95 = 0
+		self.dice = 0
+		self.specificity = 0
+		self.sensitivity = 0
+		self.recall = 0
+		
+		self.sum_loss = 0
+		self.sum_iou = 0
+		self.sum_hausdorff = 0
+		self.sum_hd95 = 0
+		self.sum_dice = 0
+		self.sum_specificity = 0
+		self.sum_sensitivity = 0
+		self.sum_recall = 0
+
+		self.avg_loss = 0
+		self.avg_iou = 0
+		self.avg_hausdorff = 0
+		self.avg_hd95 = 0
+		self.avg_dice = 0
+		self.avg_specificity = 0
+		self.avg_sensitivity = 0
+		self.avg_recall = 0
+	def update(self,loss, n=1):
+		#  loss, iou, hausdorff, hd95, dice, specificity, sensitivity, recall
+		# self.val = val
+		recall, precision, specificity, sensitivity, dice, iou , hausdorff, hd95 =  collect_metrics(true_mask,pred_mask)
+
+		self.loss = loss
+		self.iou = iou
+		self.hausdorff = hausdorff
+		self.hd95 = hd95
+		self.dice = dice
+		self.specificity = specificity
+		self.sensitivity = sensitivity
+		self.recall = recall
+		self.precision = precision
+		
+		self.sum_loss = loss * n
+		self.sum_iou = iou * n
+		self.sum_hausdorff = hausdorff * n
+		self.sum_hd95 = hd95 * n
+		self.sum_dice = dice * n
+		self.sum_specificity = specificity * n
+		self.sum_sensitivity = sensitivity * n
+		self.sum_recall = recall * n
+		self.sum_precision = precision * n
+
+		self.avg_loss = self.sum_loss / self.count
+		self.avg_iou = self.sum_iou / self.count
+		self.avg_hausdorff = self.sum_hausdorff / self.count
+		self.avg_hd95 = self.sum_hd95 / self.count
+		self.avg_dice = self.sum_dice / self.count
+		self.avg_specificity = self.sum_specificity / self.count
+		self.avg_sensitivity = self.sum_sensitivity / self.count
+		self.avg_recall = self.sum_recall / self.count
+		self.avg_precision = self.sum_precision / self.count

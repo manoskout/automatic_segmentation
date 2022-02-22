@@ -1,6 +1,7 @@
 import argparse
 import os
-from solver import Solver
+from Binary.solver import Solver
+from Multiorgan.multisolver import MultiSolver
 from loaders.data_loader import get_loader
 from torch.backends import cudnn
 import random
@@ -48,14 +49,22 @@ def main(config):
                             num_workers=config.num_workers,
                             mode='test')
 
-    solver = Solver(config, train_loader, valid_loader, test_loader)
 
     
     # Train and sample the images
-    if config.mode == 'train':
-        solver.train_model()
-    elif config.mode == 'test':
-        solver.test()
+    if config.type == "binary":
+        solver = Solver(config, train_loader, valid_loader, test_loader)
+        if config.mode == 'train':
+            solver.train_model()
+        elif config.mode == 'test':
+            solver.test()
+    elif config.type == "multiclass":
+        MultiSolver = Solver(config, train_loader, valid_loader, test_loader)
+
+        if config.mode == 'train':
+            solver.train_model()
+        elif config.mode == 'test':
+            solver.test()
 
 
 if __name__ == '__main__':
@@ -63,6 +72,7 @@ if __name__ == '__main__':
 
     
     # model hyper-parameters
+    parser.add_argument('--type', type=str, default="binary")
     parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--t', type=int, default=3, help='t for Recurrent step of R2U_Net or R2AttU_Net')  
     # training hyper-parameters
