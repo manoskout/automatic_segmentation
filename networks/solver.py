@@ -5,7 +5,8 @@ import torch
 torch.cuda.empty_cache()
 import torchvision
 from torch import optim
-from utils_metrics import DiceBCELoss, collect_metrics
+from utils_metrics import DiceBCELoss,DiceLoss,FocalLoss, collect_metrics
+from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
 from tqdm import tqdm
@@ -59,9 +60,10 @@ class Solver(object):
 		elif self.model_type == 'R2AttU_Net':
 			self.unet = R2AttU_Net(img_ch=self.img_ch,output_ch=self.output_ch,t=self.t)
 			
-		self.grad_scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
-		self.optimizer = optim.Adam(list(self.unet.parameters()),
-									 self.lr, [self.beta1, self.beta2])
+		# self.grad_scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
+		# self.optimizer = optim.Adam(list(self.unet.parameters()),
+		# 							 self.lr, [self.beta1, self.beta2])
+		self.optimizer = optim.RMSprop(self.unet.parameters(), lr=self.lr, weight_decay=1e-8, momentum=0.9)
 		self.unet.to(self.device)
 
 	def save_validation_results(self, image, pred_mask, true_mask,epoch):
@@ -92,7 +94,19 @@ class Solver(object):
 				)
 			)
 		)
-		
+
+	def _update_tensorboard(self,mode,loss, recall, sensitivity, specificity, dice_c, iou,hd,hd95):	
+		self.writer.add_scalars("loss", {mode:loss}, self.epoch)
+		self.writer.add_scalars("recall", {mode:recall}, self.epoch)
+		self.writer.add_scalars("sensitivity", {mode:sensitivity}, self.epoch)
+		self.writer.add_scalars("specificity", {mode:specificity}, self.epoch)
+		self.writer.add_scalars("dice", {mode:dice_c}, self.epoch)
+		self.writer.add_scalars("jaccard", {mode:iou}, self.epoch)
+		self.writer.add_scalars("hausdorff", {mode:hd}, self.epoch)
+		self.writer.add_scalars("hausforff_95", {mode:hd95}, self.epoch)
+
+
+
 	def evaluation(self):
 		"""
 		"""
@@ -110,7 +124,7 @@ class Solver(object):
 		valid_loss = length = 0
 		self.unet.eval()
 		num_val_batches = len(self.valid_loader)
-		recall = precision = f1 = specificity = dice_c = iou = 0.		
+		recall = precision = specificity = sensitivity = dice_c = iou = hausdorff_distance = hausdorff_distance_95 = 0.		
 		for (image, true_mask) in tqdm(
 			self.valid_loader, 
 			total = num_val_batches, 
@@ -124,23 +138,27 @@ class Solver(object):
 				pred_mask = self.unet(image)
 				loss = self.criterion(pred_mask,true_mask)
 				valid_loss += loss.item() * (image.size(0)/self.batch_size)
-			_recall, _precision, _f1, _specificity, _dice_c, _iou =  collect_metrics(true_mask,pred_mask)
+			_recall, _precision, _specificity, _sensitivity, _dice_c, _iou ,_hausdorff_distance, _hausdorff_distance_95 =  collect_metrics(true_mask,pred_mask)
 			recall+=_recall
 			precision+=_precision
-			f1+=_f1
+			sensitivity+= _sensitivity
 			specificity += _specificity
 			dice_c += _dice_c
 			iou+=_iou
+			hausdorff_distance += _hausdorff_distance
+			hausdorff_distance_95 += _hausdorff_distance_95
 			length += image.size(0)/self.batch_size
 			
 		self.unet.train()
 		dice_c = dice_c/length
 		recall = recall/length
 		precision = precision/length
-		f1 = f1/length
+		sensitivity = sensitivity/length
 		iou = iou/length
 		specificity = specificity/length
 		valid_loss = valid_loss/length
+		hausdorff_distance = hausdorff_distance/length
+		hausdorff_distance_95 = hausdorff_distance_95/length
 		# Save the prediction
 		self.save_validation_results(image, pred_mask, true_mask,self.epoch)
 		if self.min_valid_loss > valid_loss:
@@ -148,14 +166,15 @@ class Solver(object):
 			self.min_valid_loss = valid_loss
 			# Saving State Dict
 			torch.save(self.unet.state_dict(), unet_path)
-		print(f'[Validation] --> Loss: {valid_loss} DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, F1: {f1}, IoU: {iou}')
+		print(f'[Validation] --> Loss: {valid_loss} DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, Sensitivity: {sensitivity}, IoU: {iou}, HD: {hausdorff_distance}, HD95: {hausdorff_distance_95}')
 		# self.wr_valid.writerow([self.epoch+1,self.lr, valid_loss, recall, precision, f1, specificity, dice_c, iou])
-		self.wr_valid.writerow([self.epoch+1,self.lr, valid_loss, dice_c, iou])
+		self._update_tensorboard("Validation",valid_loss, recall, sensitivity, specificity, dice_c, iou,hausdorff_distance,hausdorff_distance_95)
+		self.wr_valid.writerow([self.epoch+1,self.lr, valid_loss, precision, recall, sensitivity, specificity, dice_c, iou,hausdorff_distance,hausdorff_distance_95])
 	
 	def train_epoch(self):
 		self.unet.train(True)
 		epoch_loss = length = 0
-		recall = specificity = precision = f1 = dice_c = iou = valid_loss = 0.	
+		recall = specificity = precision = dice_c = iou = sensitivity = hausdorff_distance = hausdorff_distance_95 = 0.	
 		epoch_loss_values = list()
 		with tqdm(total=self.n_train, desc=f'Epoch {self.epoch + 1}/{self.num_epochs}', unit='img') as pbar:
 			for i, (images, true_masks) in enumerate(self.train_loader):
@@ -176,18 +195,18 @@ class Solver(object):
 				pbar.update(int(images.shape[0]/self.batch_size))
 				self.global_step +=1
 				epoch_loss += loss.item()
-				_recall, _precision, _f1, _specificity, _dice_c, _iou =  collect_metrics(true_masks,pred_mask)
+				_recall, _precision, _specificity, _sensitivity, _dice_c, _iou ,_hausdorff_distance, _hausdorff_distance_95 =  collect_metrics(true_masks, pred_mask)
 				recall+=_recall
 				precision+=_precision
-				f1+=_f1
+				sensitivity+= _sensitivity
 				specificity += _specificity
 				dice_c += _dice_c
 				iou+=_iou
+				hausdorff_distance += _hausdorff_distance
+				hausdorff_distance_95 += _hausdorff_distance_95
 				length += images.size(0)/self.batch_size
 
-				# print(f'Length: {length}Loss: {epoch_loss/n_train}, \n[Training] DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, F1: {f1}, IoU: {iou}')
 
-				# writer.add_scalar("train_loss", loss.item(), self.num_epochs*epoch + length)
 				pbar.set_postfix(**{'loss (batch)': loss.item()})
 			epoch_loss /=length
 			epoch_loss_values.append(epoch_loss)
@@ -195,15 +214,18 @@ class Solver(object):
 		dice_c = dice_c/length
 		recall = recall/length
 		precision = precision/length
-		f1 = f1/length
+		sensitivity = sensitivity/length
 		iou = iou/length
 		specificity = specificity/length
+		hausdorff_distance = hausdorff_distance/length
+		hausdorff_distance_95 = hausdorff_distance_95/length
+		self._update_tensorboard("Train",epoch_loss, recall, sensitivity, specificity, dice_c, iou,hausdorff_distance,hausdorff_distance_95)			
 
 		# Print the log info
-		print(f'Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {epoch_loss}, \n[Training] DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, F1: {f1}, IoU: {iou}')
+		print(f'Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {epoch_loss}, \n[Training] DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, Sensitivity: {sensitivity}, IoU: {iou} , HD: {hausdorff_distance}, HD95: {hausdorff_distance_95}')
 		# Update csv
 		# self.wr_train.writerow([self.epoch+1,self.lr,epoch_loss, recall, precision, f1, specificity, dice_c, iou])
-		self.wr_train.writerow([self.epoch+1,self.lr,epoch_loss, dice_c, iou])
+		self.wr_train.writerow([self.epoch+1,self.lr,epoch_loss, precision, recall, sensitivity, specificity, dice_c, iou,hausdorff_distance,hausdorff_distance_95])
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
@@ -240,6 +262,9 @@ class Solver(object):
 		self.wr_train = csv.writer(training_log)
 		self.wr_valid = csv.writer(validation_log)
 		
+		self.wr_valid.writerow(["epoch","lr" "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hausdorff_distance","hausdorff_distance_95"])
+		self.wr_train.writerow(["epoch","lr" "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hausdorff_distance","hausdorff_distance_95"])
+		
 
 		# U-Net Train
 		if os.path.isfile(unet_path):
@@ -251,7 +276,7 @@ class Solver(object):
 			lr = self.lr
 			self.n_train = len(self.train_loader)
 			self.global_step = 0
-			writer = SummaryWriter()
+			self.writer = SummaryWriter()
 			# print("n_train: ",n_train)
 			for epoch in range(self.num_epochs):
 				self.epoch = epoch
@@ -271,4 +296,3 @@ class Solver(object):
 						self.evaluation()
 			training_log.close()
 			validation_log.close()
-			writer.close

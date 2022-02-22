@@ -29,8 +29,8 @@ if __name__ == "__main__":
     np.random.seed(42)
     root_dir = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM" # data root path
     organ = "RECTUM"
-    val_ratio = 0.15
-    test_ratio = 0.05
+    val_ratio = 0.2
+    test_ratio = 0.2
     # for cls in classes_dir:
     # Check about the classes
     if not os.path.exists(root_dir +'\\train'):

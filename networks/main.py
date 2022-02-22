@@ -1,7 +1,7 @@
 import argparse
 import os
 from solver import Solver
-from data_loader import get_loader
+from loaders.data_loader import get_loader
 from torch.backends import cudnn
 import random
 
@@ -20,14 +20,13 @@ def main(config):
     if not os.path.exists(config.result_path):
         os.makedirs(config.result_path)
     
-    lr = random.random()*0.0005 + 0.0000005
+    
+    lr = config.lr 
     print("Learning rate = ", lr)
-    config.lr = lr
     epoch = config.num_epochs
     decay_ratio = random.random()*0.8
     decay_epoch = int(epoch*decay_ratio)
 
-    config.lr = lr
     config.num_epochs_decay = decay_epoch
 
     print('Defined parameters')
@@ -73,7 +72,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs_decay', type=int, default=70)
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--lr', type=float, default=0.0001)
+    parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--beta1', type=float, default=0.5)        # momentum1 in Adam
     parser.add_argument('--beta2', type=float, default=0.999)      # momentum2 in Adam    
     # misc

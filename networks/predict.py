@@ -5,14 +5,13 @@ import torch
 torch.cuda.empty_cache()
 import torchvision
 from torch import optim
-from utils_metrics import DiceBCELoss, collect_metrics
+from utils_metrics import DiceBCELoss, collection #, collect_metrics
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import argparse
-from data_loader import get_loader
-
+from loaders.data_loader import get_loader
 
 def build_model(cfg, device):
     """Build generator and discriminator."""
