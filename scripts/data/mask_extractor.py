@@ -86,13 +86,14 @@ def poly_to_mask(polygon, width, height, label = 1):
 class MaskBuilder:
   """Wrapper class to facilitate appending and extracting ROI's within an RTStruct
   """
-  def __init__(self, dataset_path: str, series_data: list, rt_struct: FileDataset, is_multiorgan=True, OARS = [], ROIGenerationAlgorithm=0):
+  def __init__(self, dataset_path: str, series_data: list, rt_struct: FileDataset, is_multiorgan=True,contours_only=False, OARS = [], ROIGenerationAlgorithm=0):
     self.dataset_path = dataset_path
     self.is_multiorgan = is_multiorgan
     self.OARS = OARS
     self.series_data = series_data
     self.rt_struct = rt_struct
     self.mask_data={}
+    self.contours_only = contours_only
   
   def get_roi_names(self):
     """Returns a list of the names of all ROI within the RTStruct
@@ -169,27 +170,25 @@ class MaskBuilder:
     return organ_ids
 
   def save_as_nifti(self,array,patient, path,affine= np.eye(4)):
+    """Save the array of images to a nifti.gz file"""
     res = nib.Nifti1Image(array, affine)
     print(os.path.join(path, f'{patient}.nii.gz'))
     nib.save(res, os.path.join(path, f'{patient}.nii.gz'))
   
-  def get_json_data(self,):
-    """
-    """
-    return self.mask_data
 
   def clean_mask_data(self,):
-    """"""
+    """
+    If the patients are more than one it just clean the mask data 
+    dictionary to export the next patient's MRIS
+    """
     self.mask_data={}
   
-  def create_masks(self): # just hardcoded to check the rois , TODO : Add two different one for just an organ and other for multiple organs
+  def create_masks(self):
     refROInumbers= self.get_ref_ROI_num(self.OARS) 
-    # print(f"Roi Numbers : {refROInumbers}")
     slices_ms = [] 
     mask_dict = {}
     
     for index,slice in enumerate(self.series_data,1):
-        # if index == :
         width, height = self.get_slice_shape(slice)
         mask_dict[slice.SOPInstanceUID] = []
         self.mask_data[str(index)]={}
@@ -200,13 +199,19 @@ class MaskBuilder:
                       if contour.ContourImageSequence[0].ReferencedSOPInstanceUID == slice.SOPInstanceUID:
                           mask_coords = self.update_pixel_coords(slice, contour)
                           mask = poly_to_mask(mask_coords, width=width,height=height,label = label)
-                          mask_dict[slice.SOPInstanceUID].append(mask)
+                          mask_dict[slice.SOPInstanceUID].append(mask)                        
                       else:
                           mask = np.zeros((height,width))
-                          mask_dict[slice.SOPInstanceUID].append(mask)
+                          mask_dict[slice.SOPInstanceUID].append(mask) if not self.contours_only else None
+                  else:
+                    print("Error : 11110 ... Really bad")
           self.mask_data[str(index)]["mask"] = mask_dict[slice.SOPInstanceUID]
-        self.mask_data[str(index)]["SOPInstanceUID"]= slice.SOPInstanceUID
-        self.mask_data[str(index)]["slice"] = slice
+        if mask_dict[slice.SOPInstanceUID]:
+          self.mask_data[str(index)]["SOPInstanceUID"]= slice.SOPInstanceUID
+          self.mask_data[str(index)]["slice"] = slice
+        else:
+          del self.mask_data[str(index)]
+          
 
 
   def save_masks(self,patient_path,patient):
@@ -237,9 +242,6 @@ class MaskBuilder:
         # dicom.dcmwrite("{}/{}_{}.dcm".format(mri_path,patient[0:3],case[0]), case[1]["slice"])
         # print("Mask saved : {}/{}.png".format(os.path.join(mask_path,segment),case[0]))
 
-    # if masks:
-    # print(patient)
-    # array,patient, path,affine= np.eye(4)
     self.save_as_nifti(
       np.array(masks, dtype=np.uint8).transpose([2,1,0]),
       patient+"_masks",
@@ -287,13 +289,12 @@ def main(config):
     output_path = config.output_path if config.output_path != " " else patient_path
     series,rt_struct = load_dcm_rt_from_path(mri_path,struct_path)
     
-    mb = MaskBuilder(DATASET_PATH,series, rt_struct, is_multiorgan = True, OARS = OARS)
+    mb = MaskBuilder(DATASET_PATH,series, rt_struct, OARS = OARS, contours_only= config.contours_only)
     roi_names = mb.get_roi_names()
     logging.info(f"Available rois: {roi_names}") if config.include_rt_struct else print("\n")
     mb.create_masks()
     mb.save_masks(patient_path, patient)
     mb.clean_mask_data()
-    print("----- For the patient {}".format(patient))
     print("--------------------------------NEXT-------------------------------------")  
   print("--->> Patients that are not yet investigated because of multiple rt_struct: {} \nStruct Path: ".format(patient_with_doubled_rt,doubled_rt_structs)) 
     
@@ -305,7 +306,7 @@ if __name__ =="__main__":
   parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"], help="Provide the list with the organs that you want to segment, if the names are known")
   parser.add_argument("--include_rt_struct", action="store_true", help="Create and nii file with mask. Only if the patient contains rt struct file")
   parser.add_argument("-o", "--output_path", type=str, default= " ", help="The output file is save into the patients folder by default")
-
+  parser.add_argument("--contours_only", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
   arguments= parser.parse_args()
   main(arguments)
 
