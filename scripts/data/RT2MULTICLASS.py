@@ -60,9 +60,7 @@ def load_dcm_rt_from_path(dicom_series_path: str, rt_struct_path: str):
     return series_data,rt
 
 
-def poly_to_mask(polygon, width, height):
-    from PIL import Image, ImageDraw
-    
+def poly_to_mask(polygon, width, height, label = 1):    
     """Convert polygon to mask
     :param polygon: list of pairs of x, y coords [(x1, y1), (x2, y2), ...]
      in units of pixels
@@ -73,20 +71,20 @@ def poly_to_mask(polygon, width, height):
 
     # http://stackoverflow.com/a/3732128/1410871
     img = Image.new(mode='L', size=(width, height), color=0)
-    ImageDraw.Draw(img).polygon(xy=polygon, outline=0, fill=1)
-    mask = np.array(img).astype(bool)
+    ImageDraw.Draw(img).polygon(xy=polygon, outline=label, fill=label)
+    mask = np.array(img).astype(np.uint16)
     return mask
 
 
 class MaskBuilder:
   """Wrapper class to facilitate appending and extracting ROI's within an RTStruct
   """
-  def __init__(self, dataset_path: str, series_data: list, rt_struct: FileDataset, ROIGenerationAlgorithm=0):
+  def __init__(self, dataset_path: str, series_data: list, rt_struct: FileDataset, is_multiorgan=True, OARS = [], ROIGenerationAlgorithm=0):
     self.dataset_path = dataset_path
+    self.is_multiorgan = is_multiorgan
+    self.OARS = OARS
     self.series_data = series_data
     self.rt_struct = rt_struct
-    self.frame_of_reference_uid = rt_struct.ReferencedFrameOfReferenceSequence[
-      -1].FrameOfReferenceUID  # Use last strucitured set ROI
     self.mask_data={}
   
   def get_roi_names(self):
@@ -145,20 +143,21 @@ class MaskBuilder:
     ]
 
 
-  def get_ref_ROI_num(self, segment : str):
+  def get_ref_ROI_num(self, segment=""):
     """Return the number of the segment that we want to extract
     """
-    for seg in self.rt_struct.StructureSetROISequence:
-      if segment == seg.ROIName:
-        return int(seg.ROINumber)-1 # Because it starts from 0
-      else:
-        continue
-    return []
+    organ_ids=[]
+    if self.is_multiorgan:
+        for seg in self.rt_struct.StructureSetROISequence:
+            for oar in self.OARS:
+                if oar == seg.ROIName:
+                    organ_ids.append(int(seg.ROINumber)-1)
+    else:
+        for seg in self.rt_struct.StructureSetROISequence:
+            if segment == seg.ROIName:
+                return int(seg.ROINumber)-1 # Because it starts from 0
+    return organ_ids
 
-  def concatinate_mask(self,prev_mask, mask):
-    # print(prev_mask)
-    # print(mask)
-    return prev_mask+mask
   
   def get_json_data(self,):
     """
@@ -169,97 +168,55 @@ class MaskBuilder:
     """"""
     self.mask_data={}
   
-  def create_masks(self,segment : str):
-    refROInumber= self.get_ref_ROI_num(segment) 
+  def create_masks(self): # just hardcoded to check the rois , TODO : Add two different one for just an organ and other for multiple organs
+    refROInumbers= self.get_ref_ROI_num(self.OARS) 
+    print(f"Roi Numbers : {refROInumbers}")
     slices_ms = [] 
-    masks = []
-    indexes = []
-    prev_index = 0
+    mask_dict = {}
     for index,slice in enumerate(self.series_data,1):
-      width, height = self.get_slice_shape(slice)
-      
-      for contour in self.rt_struct.ROIContourSequence[refROInumber].ContourSequence:
-        if hasattr(contour,"ContourImageSequence"):
-          if contour.ContourImageSequence[0].ReferencedSOPInstanceUID == slice.SOPInstanceUID:
-            self.mask_data[str(index)]={}
-            mask_coords = self.update_pixel_coords(slice,contour)
-            mask = poly_to_mask(mask_coords, width, height)
-            # print("Curr index: {}, prev: {}".format(index,prev_index))
-            
-            if index == prev_index:
-              masks[-1] = self.concatinate_mask(masks[-1],mask)
-              self.mask_data[str(index)]["ReferencedSegment"]= segment
-              self.mask_data[str(index)]["SOPInstanceUID"]= slice.SOPInstanceUID
-              self.mask_data[str(index)]["slice"]= slice
+        # if index == :
+        width, height = self.get_slice_shape(slice)
+        mask_dict[slice.SOPInstanceUID] = []
+        self.mask_data[str(index)]={}
 
-              self.mask_data[str(index)]["mask"]= masks[-1]
-              prev_index = 0          
-            elif index != prev_index :
-            # elif prev_index is None:
-              self.mask_data[str(index)]["ReferencedSegment"]= segment
-              self.mask_data[str(index)]["SOPInstanceUID"]= slice.SOPInstanceUID
-              self.mask_data[str(index)]["slice"]= slice
-              self.mask_data[str(index)]["mask"]= mask
-              
-              indexes.append(index)
-              slices_ms.append(slice.pixel_array)
-              masks.append(mask)
-              prev_mask = mask
-              prev_index=index
-            else:
-              # print(index)
-              print("ERROR 1155: It should not be shown!")
-              # print(index)          
-            prev_index=index
-          else:
-            # print(f"Segmeng: {segment} has no attrubute : ContourImageSequence. Aborted")
-            continue
-          
-          # print("Contour with id : {} is related to image {}".format(contour.ContourImageSequence[0].ReferencedSOPInstanceUID, str(index)))
-    # mri_viewer.multi_slice_viewer(masks,slices_ms, "MASK", "MRI")
-
-  # def delete_all_masks(self,):
+        for label,oar in enumerate(refROInumbers,1):
+            for contour in rt_struct.ROIContourSequence[oar].ContourSequence:
+                if hasattr(contour,"ContourImageSequence"):
+                    if contour.ContourImageSequence[0].ReferencedSOPInstanceUID == slice.SOPInstanceUID:
+                        mask_coords = self.update_pixel_coords(slice, contour)
+                        mask = poly_to_mask(mask_coords, width=width,height=height,label = label)
+                        mask_dict[slice.SOPInstanceUID].append(mask)
+        self.mask_data[str(index)]["SOPInstanceUID"]= slice.SOPInstanceUID
+        self.mask_data[str(index)]["mask"] = mask_dict[slice.SOPInstanceUID]
+        self.mask_data[str(index)]["slice"] = slice
 
 
-  def save_masks(self,patient_path, segment):
-    mask_path= os.path.join(patient_path,"MASKS")
-    if not os.path.exists(mask_path):
+  def save_masks(self,patient_path,patient):
+    dataset = os.path.join(patient_path,"results")
+    mask_path= os.path.join(dataset,"mask")
+    mri_path= os.path.join(dataset,"mri")
+    avg_value_of_classes = 255/len(self.OARS)
+    if not os.path.exists(dataset):
+      os.mkdir(dataset)
       os.mkdir(mask_path)
+      os.mkdir(mri_path)
 
-    if not os.path.exists(os.path.join(mask_path,segment)):
-      os.mkdir(os.path.join(mask_path,segment))
-    
     for case in self.mask_data.items():
-      msk = Image.fromarray(case[1]["mask"])
-      slc = case[1]["slice"]
-      msk.save("{}/{}.png".format(os.path.join(mask_path,segment),case[0]))
-      # slc.save("{}/slc{}.png".format(os.path.join(MASK_PATH,segment),case[0]))
-      # print(type(case[1]["slice"]))
-      dicom.dcmwrite("{}/{}.dcm".format(os.path.join(mask_path,segment),case[0]), case[1]["slice"])
-      # print("Mask saved : {}/{}.png".format(os.path.join(mask_path,segment),case[0]))
+      masks= case[1]["mask"]
+      if masks:
+        mask = sum(masks)
+      else:
+        mask =np.array(masks)
+      if mask.size!=0:
+        print(np.unique(mask))
+        mask = Image.fromarray((mask*avg_value_of_classes).astype(np.uint8))
+    
+        slc = case[1]["slice"]
+        mask.save("{}/{}_{}.png".format(mask_path,patient,case[0]))
+        dicom.dcmwrite("{}/{}_{}.dcm".format(mri_path,patient,case[0]), case[1]["slice"])
+        # print("Mask saved : {}/{}.png".format(os.path.join(mask_path,segment),case[0]))
     print("All files saved succesfully.")
     
-
-
-    
-
-
-    
-
-
-
-
-
-# ------------- DEBUG ---------------
-# series,rt_struct = load_dcm_rt_from_path(MRI_PATH,STRUCT_FILE)
-# mb = MaskBuilder(series, rt_struct)
-# roi_names = mb.get_roi_names()
-# print(roi_names[0].isupper())
-# for roi in roi_names:
-#   if roi.isupper():
-#     mb.create_masks(roi)# Make it automatically (using args)
-#     mb.save_masks(roi)
-#     mb.clean_mask_data()
 def clean_existed_masks(dataset_path, mask_folder_name):
   PATIENT_FOLDERS = get_patient_folder_list(dataset_path)
   # Delete all the pre existed segments
@@ -276,6 +233,7 @@ PATIENT_FOLDERS = [patient for patient in get_patient_folder_list(DATASET_PATH) 
 # print(PATIENT_FOLDERS)
 doubled_rt_structs=[]
 patient_with_doubled_rt = []
+OARS = ["RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"]
 for patient_path in PATIENT_FOLDERS:
   patient = os.path.basename(patient_path)
   logging.info("Mask extraction for the patient: {} started".format(patient))
@@ -285,14 +243,12 @@ for patient_path in PATIENT_FOLDERS:
   mri_path = os.path.join(patient_path,mris)
   struct_path = os.path.join(patient_path,structs)
   series,rt_struct = load_dcm_rt_from_path(mri_path,struct_path)
-  mb = MaskBuilder(DATASET_PATH,series, rt_struct)
+  mb = MaskBuilder(DATASET_PATH,series, rt_struct, is_multiorgan = True, OARS = OARS)
   roi_names = mb.get_roi_names()
-  for roi in roi_names:
-    print(roi)
-    mb.create_masks(roi)
-    mb.save_masks(patient_path, roi)
-    mb.clean_mask_data()
-    print("----- For the patient {}".format(patient))
+  mb.create_masks()
+  mb.save_masks(patient_path, patient)
+  mb.clean_mask_data()
+  print("----- For the patient {}".format(patient))
   print("--------------------------------NEXT-------------------------------------")  
 print("--->> Patients that are not yet investigated because of multiple rt_struct: {} \nStruct Path: ".format(patient_with_doubled_rt,doubled_rt_structs)) 
     
@@ -303,3 +259,4 @@ print("--->> Patients that are not yet investigated because of multiple rt_struc
 
 # Sort slices according to the slice location
 # slices = sorted(slices, key=lambda s: s.SliceLocation)
+
