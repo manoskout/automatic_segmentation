@@ -256,7 +256,7 @@ class Solver(object):
 				#===================================== Validation ====================================#
 				division_step = (self.n_train // (10 * self.batch_size))
 				if division_step > 0:
-					print(f"Global Step : {self.global_step}, division_step: {division_step} Modulo: {self.global_step % division_step}")
+					# print(f"Global Step : {self.global_step}, division_step: {division_step} Modulo: {self.global_step % division_step}")
 					# if self.global_step % division_step == 0:	
 					self.evaluation()
 			training_log.close()
