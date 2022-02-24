@@ -5,7 +5,7 @@ import torch
 torch.cuda.empty_cache()
 import torchvision
 from torch import optim
-from utils_metrics import DiceBCELoss,DiceLoss,FocalLoss, collect_metrics
+from utils_metrics import DiceBCELoss,DiceLoss,FocalLoss,AverageMeter
 from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
@@ -95,17 +95,23 @@ class Solver(object):
 			)
 		)
 
-	def _update_tensorboard(self,mode,loss, recall, sensitivity, specificity, dice_c, iou,hd,hd95):	
-		self.writer.add_scalars("loss", {mode:loss}, self.epoch)
-		self.writer.add_scalars("recall", {mode:recall}, self.epoch)
-		self.writer.add_scalars("sensitivity", {mode:sensitivity}, self.epoch)
-		self.writer.add_scalars("specificity", {mode:specificity}, self.epoch)
-		self.writer.add_scalars("dice", {mode:dice_c}, self.epoch)
-		self.writer.add_scalars("jaccard", {mode:iou}, self.epoch)
-		self.writer.add_scalars("hausdorff", {mode:hd}, self.epoch)
-		self.writer.add_scalars("hausforff_95", {mode:hd95}, self.epoch)
+	def _update_metricRecords(self,mode,metric):	
 
-
+		self.writer.add_scalars("loss", {mode:metric.avg_loss}, self.epoch)
+		self.writer.add_scalars("recall", {mode:metric.avg_recall}, self.epoch)
+		self.writer.add_scalars("sensitivity", {mode:metric.avg_sensitivity}, self.epoch)
+		self.writer.add_scalars("specificity", {mode:metric.avg_specificity}, self.epoch)
+		self.writer.add_scalars("dice", {mode:metric.avg_dice}, self.epoch)
+		self.writer.add_scalars("jaccard", {mode:metric.avg_iou}, self.epoch)
+		self.writer.add_scalars("hausdorff", {mode:metric.avg_hausdorff}, self.epoch)
+		self.writer.add_scalars("hausforff_95", {mode:metric.avg_hd95}, self.epoch)
+		self.wr_valid.writerow(
+			[
+				self.epoch+1,self.lr, metric.avg_loss, 
+				metric.avg_precision, metric.avg_recall, metric.avg_sensitivity, 
+				metric.avg_specificity, metric.avg_dice, metric.avg_iou,
+				metric.avg_hausdorff,metric.avg_hd95
+			])
 
 	def evaluation(self):
 		"""
@@ -121,10 +127,9 @@ class Solver(object):
 				)
 		)
 		
-		valid_loss = length = 0
 		self.unet.eval()
 		num_val_batches = len(self.valid_loader)
-		recall = precision = specificity = sensitivity = dice_c = iou = hausdorff_distance = hausdorff_distance_95 = 0.		
+		metrics = AverageMeter()
 		for (image, true_mask) in tqdm(
 			self.valid_loader, 
 			total = num_val_batches, 
@@ -137,95 +142,54 @@ class Solver(object):
 			with torch.no_grad():		
 				pred_mask = self.unet(image)
 				loss = self.criterion(pred_mask,true_mask)
-				valid_loss += loss.item() * (image.size(0)/self.batch_size)
-			_recall, _precision, _specificity, _sensitivity, _dice_c, _iou ,_hausdorff_distance, _hausdorff_distance_95 =  collect_metrics(true_mask,pred_mask)
-			recall+=_recall
-			precision+=_precision
-			sensitivity+= _sensitivity
-			specificity += _specificity
-			dice_c += _dice_c
-			iou+=_iou
-			hausdorff_distance += _hausdorff_distance
-			hausdorff_distance_95 += _hausdorff_distance_95
-			length += image.size(0)/self.batch_size
+			metrics.update(loss.item(), true_mask, pred_mask, image.size(0)/self.batch_size)
 			
 		self.unet.train()
-		dice_c = dice_c/length
-		recall = recall/length
-		precision = precision/length
-		sensitivity = sensitivity/length
-		iou = iou/length
-		specificity = specificity/length
-		valid_loss = valid_loss/length
-		hausdorff_distance = hausdorff_distance/length
-		hausdorff_distance_95 = hausdorff_distance_95/length
 		# Save the prediction
 		self.save_validation_results(image, pred_mask, true_mask,self.epoch)
-		if self.min_valid_loss > valid_loss:
-			print(f'[Validation] Loss Decreased({self.min_valid_loss:.6f}--->{valid_loss:.6f}) \t Saving The Model')
-			self.min_valid_loss = valid_loss
+		if self.min_valid_loss > metrics.avg_loss:
+			print(f'[Validation] Loss Decreased({self.min_valid_loss:.6f}--->{metrics.avg_loss:.6f}) \t Saving The Model')
+			self.min_valid_loss = metrics.avg_loss
 			# Saving State Dict
 			torch.save(self.unet.state_dict(), unet_path)
-		print(f'[Validation] --> Loss: {valid_loss} DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, Sensitivity: {sensitivity}, IoU: {iou}, HD: {hausdorff_distance}, HD95: {hausdorff_distance_95}')
-		# self.wr_valid.writerow([self.epoch+1,self.lr, valid_loss, recall, precision, f1, specificity, dice_c, iou])
-		self._update_tensorboard("Validation",valid_loss, recall, sensitivity, specificity, dice_c, iou,hausdorff_distance,hausdorff_distance_95)
-		self.wr_valid.writerow([self.epoch+1,self.lr, valid_loss, precision, recall, sensitivity, specificity, dice_c, iou,hausdorff_distance,hausdorff_distance_95])
+		print(f'[Validation] --> Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, \n[Training] DC: {metrics.avg_dice}, \
+				Recall: {metrics.avg_recall}, Precision: {metrics.avg_precision}, Specificity: {metrics.avg_specificity}, \
+				Sensitivity: {metrics.avg_sensitivity}, IoU: {metrics.avg_iou} , HD: {metrics.avg_hausdorff}, HD95: {metrics.avg_hd95}')
+		self._update_metricRecords("Validation",metrics)
 	
 	def train_epoch(self):
 		self.unet.train(True)
-		epoch_loss = length = 0
-		recall = specificity = precision = dice_c = iou = sensitivity = hausdorff_distance = hausdorff_distance_95 = 0.	
+		metrics = AverageMeter()
 		epoch_loss_values = list()
 		with tqdm(total=self.n_train, desc=f'Epoch {self.epoch + 1}/{self.num_epochs}', unit='img') as pbar:
-			for i, (images, true_masks) in enumerate(self.train_loader):
-				images = images.to(self.device,dtype=torch.float32)
-				true_masks = true_masks.to(self.device, dtype=torch.float32)
+			for i, (image, true_mask) in enumerate(self.train_loader):
+				image = image.to(self.device,dtype=torch.float32)
+				true_mask = true_mask.to(self.device, dtype=torch.float32)
 
-				assert images.shape[1] == self.img_ch, \
+				assert image.shape[1] == self.img_ch, \
 			f'Network has been defined with {self.img_ch} input channels'
 				self.optimizer.zero_grad(set_to_none=True)
 				# with torch.cuda.amp.autocast(enabled=self.amp):
-				pred_mask = self.unet(images)
-				loss = self.criterion(pred_mask,true_masks)
+				pred_mask = self.unet(image)
+				loss = self.criterion(pred_mask,true_mask)
 
 				# Backprop + optimize
 				loss.backward()
 				self.optimizer.step()
 
-				pbar.update(int(images.shape[0]/self.batch_size))
+				pbar.update(int(image.shape[0]/self.batch_size))
 				self.global_step +=1
-				epoch_loss += loss.item()
-				_recall, _precision, _specificity, _sensitivity, _dice_c, _iou ,_hausdorff_distance, _hausdorff_distance_95 =  collect_metrics(true_masks, pred_mask)
-				recall+=_recall
-				precision+=_precision
-				sensitivity+= _sensitivity
-				specificity += _specificity
-				dice_c += _dice_c
-				iou+=_iou
-				hausdorff_distance += _hausdorff_distance
-				hausdorff_distance_95 += _hausdorff_distance_95
-				length += images.size(0)/self.batch_size
-
+				metrics.update(loss.item(), true_mask, pred_mask, image.size(0)/self.batch_size)
 
 				pbar.set_postfix(**{'loss (batch)': loss.item()})
-			epoch_loss /=length
-			epoch_loss_values.append(epoch_loss)
+			epoch_loss_values.append(metrics.avg_loss)
 
-		dice_c = dice_c/length
-		recall = recall/length
-		precision = precision/length
-		sensitivity = sensitivity/length
-		iou = iou/length
-		specificity = specificity/length
-		hausdorff_distance = hausdorff_distance/length
-		hausdorff_distance_95 = hausdorff_distance_95/length
-		self._update_tensorboard("Train",epoch_loss, recall, sensitivity, specificity, dice_c, iou,hausdorff_distance,hausdorff_distance_95)			
-
-		# Print the log info
-		print(f'Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {epoch_loss}, \n[Training] DC: {dice_c}, Recall: {recall}, Precision: {precision}, Specificity: {specificity}, Sensitivity: {sensitivity}, IoU: {iou} , HD: {hausdorff_distance}, HD95: {hausdorff_distance_95}')
-		# Update csv
-		# self.wr_train.writerow([self.epoch+1,self.lr,epoch_loss, recall, precision, f1, specificity, dice_c, iou])
-		self.wr_train.writerow([self.epoch+1,self.lr,epoch_loss, precision, recall, sensitivity, specificity, dice_c, iou,hausdorff_distance,hausdorff_distance_95])
+	# Print the log info
+		print(f'[Training] [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.avg_dice}, \
+				Recall: {metrics.avg_recall}, Precision: {metrics.avg_precision}, Specificity: {metrics.avg_specificity}, \
+				Sensitivity: {metrics.avg_sensitivity}, IoU: {metrics.avg_iou} , \
+				HD: {metrics.avg_hausdorff}, HD95: {metrics.avg_hd95}')
+		self._update_metricRecords("Training",metrics)
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
@@ -292,7 +256,8 @@ class Solver(object):
 				#===================================== Validation ====================================#
 				division_step = (self.n_train // (10 * self.batch_size))
 				if division_step > 0:
-					if self.global_step % division_step == 0:	
-						self.evaluation()
+					print(f"Global Step : {self.global_step}, division_step: {division_step} Modulo: {self.global_step % division_step}")
+					# if self.global_step % division_step == 0:	
+					self.evaluation()
 			training_log.close()
 			validation_log.close()

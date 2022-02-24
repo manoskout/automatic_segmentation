@@ -5,7 +5,7 @@ import torch
 torch.cuda.empty_cache()
 import torchvision
 from torch import optim
-from utils_metrics import DiceBCELoss,DiceLoss,FocalLoss, collect_metrics, AverageMeter
+from utils_metrics import DiceBCELoss,DiceLoss,FocalLoss, AverageMeter
 from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
@@ -132,8 +132,6 @@ class MultiSolver(object):
 				self.num_epochs_decay,
 				)
 		)
-		
-		valid_loss = length = 0
 		self.unet.eval()
 		num_val_batches = len(self.valid_loader)
 		metrics = AverageMeter()	
@@ -149,15 +147,15 @@ class MultiSolver(object):
 			with torch.no_grad():		
 				pred_mask = self.unet(image)
 				loss = self.criterion(pred_mask,true_mask)
-				valid_loss += loss.item() * (image.size(0)/self.batch_size)
-			metrics.update(valid_loss, true_mask, pred_mask, image_batch.size(0))
+				# valid_loss += loss.item() * (image.size(0)/self.batch_size)
+			metrics.update(loss.item(), true_mask, pred_mask, image.size(0)/self.batch_size)
 			
 		self.unet.train()
 
 		self.save_validation_results(image, pred_mask, true_mask,self.epoch)
-		if self.min_valid_loss > valid_loss:
-			print(f'[Validation] Loss Decreased({self.min_valid_loss:.6f}--->{valid_loss:.6f}) \t Saving The Model')
-			self.min_valid_loss = valid_loss
+		if self.min_valid_loss > metrics.avg_loss:
+			print(f'[Validation] Loss Decreased({self.min_valid_loss:.6f}--->{metrics.avg_loss:.6f}) \t Saving The Model')
+			self.min_valid_loss = metrics.avg_loss
 			# Saving State Dict
 			torch.save(self.unet.state_dict(), unet_path)
 		print(f'[Validation] --> Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, \n[Training] DC: {metrics.avg_dice}, \
@@ -168,38 +166,38 @@ class MultiSolver(object):
 	
 	def train_epoch(self):
 		self.unet.train(True)
-		epoch_loss = length = 0
 		metrics = AverageMeter()	
 		epoch_loss_values = list()
 		with tqdm(total=self.n_train, desc=f'Epoch {self.epoch + 1}/{self.num_epochs}', unit='img') as pbar:
-			for i, (images, true_masks) in enumerate(self.train_loader):
-				images = images.to(self.device,dtype=torch.float32)
-				true_masks = true_masks.to(self.device, dtype=torch.float32)
+			for i, (image, true_mask) in enumerate(self.train_loader):
+				image = image.to(self.device,dtype=torch.float32)
+				true_mask = true_mask.to(self.device, dtype=torch.float32)
 
-				assert images.shape[1] == self.img_ch, f'Network has been defined with {self.img_ch} input channels'
+				assert image.shape[1] == self.img_ch, f'Network has been defined with {self.img_ch} input channels'
 				self.optimizer.zero_grad(set_to_none=True)
 				# with torch.cuda.amp.autocast(enabled=self.amp):
-				pred_mask = self.unet(images)
-				loss = self.criterion(pred_mask,true_masks)
+				pred_mask = self.unet(image)
+				loss = self.criterion(pred_mask,true_mask)
 
 				# Backprop + optimize
 				loss.backward()
 				self.optimizer.step()
 
-				pbar.update(int(images.shape[0]/self.batch_size))
+				pbar.update(int(image.shape[0]/self.batch_size))
 				self.global_step +=1
-				metrics.update(epoch_loss, true_masks, pred_mask, image_batch.size(0))
+				metrics.update(loss.item(), true_mask, pred_mask, image.size(0))
 
 				pbar.set_postfix(**{'loss (batch)': loss.item()})
 			epoch_loss_values.append(metrics.avg_loss)
 
 
 		# Print the log info
-		print(f'Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, \n[Training] DC: {metrics.avg_dice}, \
+		print(f'[Training] [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.avg_dice}, \
 				Recall: {metrics.avg_recall}, Precision: {metrics.avg_precision}, Specificity: {metrics.avg_specificity}, \
-				Sensitivity: {metrics.avg_sensitivity}, IoU: {metrics.avg_iou} , HD: {metrics.avg_hausdorff}, HD95: {metrics.avg_hd95}')
+				Sensitivity: {metrics.avg_sensitivity}, IoU: {metrics.avg_iou} , \
+				HD: {metrics.avg_hausdorff}, HD95: {metrics.avg_hd95}')
 
-		self._update_metricRecords("Validation",metrics)
+		self._update_metricRecords("Training",metrics)
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
@@ -266,7 +264,7 @@ class MultiSolver(object):
 				#===================================== Validation ====================================#
 				division_step = (self.n_train // (10 * self.batch_size))
 				if division_step > 0:
-					if self.global_step % division_step == 0:	
-						self.evaluation()
+					# if self.global_step % division_step == 0:	
+					self.evaluation()
 			training_log.close()
 			validation_log.close()
