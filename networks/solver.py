@@ -7,6 +7,8 @@ import torchvision
 from torch import optim
 from utils_metrics import DiceBCELoss,DiceLoss,FocalLoss, collect_metrics
 from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
+# BCEWithLogitsLoss related problem here : https://stats.stackexchange.com/questions/282160/how-is-it-possible-that-validation-loss-is-increasing-while-validation-accuracy
+
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
 from tqdm import tqdm
@@ -24,7 +26,7 @@ class Solver(object):
 		self.optimizer = None
 		self.img_ch = config.img_ch
 		self.output_ch = config.output_ch
-		self.criterion = DiceBCELoss()
+		self.criterion = BCEWithLogitsLoss()
 		self.min_valid_loss = np.inf	
 		self.model_name = config.model_name				
 
@@ -61,9 +63,9 @@ class Solver(object):
 			self.unet = R2AttU_Net(img_ch=self.img_ch,output_ch=self.output_ch,t=self.t)
 			
 		# self.grad_scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
-		# self.optimizer = optim.Adam(list(self.unet.parameters()),
-		# 							 self.lr, [self.beta1, self.beta2])
-		self.optimizer = optim.RMSprop(self.unet.parameters(), lr=self.lr, weight_decay=1e-8, momentum=0.9)
+		self.optimizer = optim.Adam(list(self.unet.parameters()),
+									 self.lr, [self.beta1, self.beta2])
+		# self.optimizer = optim.RMSprop(self.unet.parameters(), lr=self.lr, weight_decay=1e-8, momentum=0.9)
 		self.unet.to(self.device)
 
 	def save_validation_results(self, image, pred_mask, true_mask,epoch):
@@ -290,9 +292,9 @@ class Solver(object):
 				
 				
 				#===================================== Validation ====================================#
-				division_step = (self.n_train // (10 * self.batch_size))
-				if division_step > 0:
-					if self.global_step % division_step == 0:	
-						self.evaluation()
+				# division_step = (self.n_train // (10 * self.batch_size))
+				# if division_step > 0:
+				# 	if self.global_step % division_step == 0:	
+				self.evaluation()
 			training_log.close()
 			validation_log.close()
