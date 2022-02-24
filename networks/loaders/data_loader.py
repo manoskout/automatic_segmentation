@@ -5,7 +5,7 @@ from torchvision import transforms as T
 from torchvision.transforms import functional as F
 import pydicom as dicom
 import cv2 as cv
-from preprocessing import crop_and_pad, limiting_filter,normalize_intensity
+from loaders.preprocessing import crop_and_pad, limiting_filter,normalize_intensity
 
 class ImageFolder(data.Dataset):
 	def __init__(self, root,image_size=256,mode='train',augmentation_prob=0.4, is_multiorgan = False):
@@ -40,8 +40,8 @@ class ImageFolder(data.Dataset):
 		"""Reads an image from a file and preprocesses it and returns."""
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
-		print(filename)
-		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + '.png')
+		# print(filename)
+		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + 'mask.png')
 		to_tensor = T.Compose([
 			T.ToTensor(),
 		])
@@ -49,7 +49,7 @@ class ImageFolder(data.Dataset):
 
 		image_file = dicom.dcmread(image_path)
 		image = image_file.pixel_array
-		# image = limiting_filter(image,threshold=10,display=False)
+		image = limiting_filter(image,threshold=10,display=False)
 		GT = cv.imread(GT_path, cv.IMREAD_GRAYSCALE)
 		image = image/np.max(image)
 		image = image.astype(np.float32)
@@ -72,7 +72,7 @@ class ImageFolder(data.Dataset):
 		image = np.expand_dims(image, axis=-1)
 		GT = np.expand_dims(GT,axis=-1)
 		image = to_tensor(image)
-		image = normalize_intensity(image, normalization="min")
+		# image = normalize_intensity(image, normalization="min")
 
 		GT = to_tensor(GT)
 		
@@ -91,21 +91,21 @@ def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',i
 								  batch_size=batch_size,
 								  shuffle=False,
 								  num_workers=num_workers)
-	# return data_loader
-	return dataset
+	return data_loader
+	# return dataset
 
-import matplotlib.pyplot as plt 
-path = "/Users/manoskoutoulakis/Desktop/Sample/016_PRO_pCT_CGFL_ok/results"
-dataload = get_loader(path,256,1,is_multiorgan=True)
-# image,mask = dataload.__getitem__(55)
-for (image,mask) in dataload:
-	# transforms = T.Compose([T.ToPILImage()])
-	image = image.data.cpu().detach().numpy().squeeze()
-	mask = mask.data.cpu().detach().numpy().squeeze()
-	# print (np.unique(mask))
+# import matplotlib.pyplot as plt 
+# path = "/Users/manoskoutoulakis/Desktop/Sample/016_PRO_pCT_CGFL_ok/results"
+# dataload = get_loader(path,256,1,is_multiorgan=True)
+# # image,mask = dataload.__getitem__(55)
+# for (image,mask) in dataload:
+# 	# transforms = T.Compose([T.ToPILImage()])
+# 	image = image.data.cpu().detach().numpy().squeeze()
+# 	mask = mask.data.cpu().detach().numpy().squeeze()
+# 	# print (np.unique(mask))
 
-	plt.imshow(image, cmap="gray")
-	plt.imshow(mask, cmap="jet", alpha= 0.3 )
+# 	plt.imshow(image, cmap="gray")
+# 	plt.imshow(mask, cmap="jet", alpha= 0.3 )
 
-	plt.show()
+# 	plt.show()
 
