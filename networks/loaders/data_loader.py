@@ -23,6 +23,15 @@ class ImageFolder(data.Dataset):
 				os.listdir(img_path)
 			)
 		)
+		# A useless and complicated script to do some tests
+		# self.image_paths =sorted(
+		# 	self.image_paths, 
+		# 	key= lambda s: int(
+		# 		os.path.basename(s)
+		# 		.split("_")[1]
+		# 		.split(".")[0]
+		# 	)
+		# )
 		self.image_size = (image_size,image_size)
 		self.mode = mode
 		print("image count in {} path :{}".format(self.mode,len(self.image_paths)))
@@ -31,6 +40,7 @@ class ImageFolder(data.Dataset):
 		"""Reads an image from a file and preprocesses it and returns."""
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
+		print(filename)
 		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + '.png')
 		to_tensor = T.Compose([
 			T.ToTensor(),
@@ -79,7 +89,7 @@ def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',i
 	dataset = ImageFolder(root = image_path, image_size =image_size, mode=mode,augmentation_prob=augmentation_prob, is_multiorgan=is_multiorgan)
 	data_loader = data.DataLoader(dataset=dataset,
 								  batch_size=batch_size,
-								  shuffle=True,
+								  shuffle=False,
 								  num_workers=num_workers)
 	# return data_loader
 	return dataset
@@ -87,14 +97,15 @@ def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',i
 import matplotlib.pyplot as plt 
 path = "/Users/manoskoutoulakis/Desktop/Sample/016_PRO_pCT_CGFL_ok/results"
 dataload = get_loader(path,256,1,is_multiorgan=True)
-image,mask = dataload.__getitem__(55)
-# transforms = T.Compose([T.ToPILImage()])
-image = image.data.cpu().detach().numpy().squeeze()
-mask = mask.data.cpu().detach().numpy().squeeze()
-print (np.unique(mask))
+# image,mask = dataload.__getitem__(55)
+for (image,mask) in dataload:
+	# transforms = T.Compose([T.ToPILImage()])
+	image = image.data.cpu().detach().numpy().squeeze()
+	mask = mask.data.cpu().detach().numpy().squeeze()
+	# print (np.unique(mask))
 
-plt.imshow(image, cmap="gray")
-plt.imshow(mask, cmap="jet", alpha= 0.3 )
+	plt.imshow(image, cmap="gray")
+	plt.imshow(mask, cmap="jet", alpha= 0.3 )
 
-plt.show()
+	plt.show()
 
