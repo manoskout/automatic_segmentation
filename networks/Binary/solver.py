@@ -152,9 +152,9 @@ class Solver(object):
 			self.min_valid_loss = metrics.avg_loss
 			# Saving State Dict
 			torch.save(self.unet.state_dict(), unet_path)
-		print(f'[Validation] --> Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, \n[Training] DC: {metrics.avg_dice}, \
-				Recall: {metrics.avg_recall}, Precision: {metrics.avg_precision}, Specificity: {metrics.avg_specificity}, \
-				Sensitivity: {metrics.avg_sensitivity}, IoU: {metrics.avg_iou} , HD: {metrics.avg_hausdorff}, HD95: {metrics.avg_hd95}')
+		print(f'[Validation] --> Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.avg_dice}, \
+			Recall: {metrics.avg_recall}, Precision: {metrics.avg_precision}, Specificity: {metrics.avg_specificity}, \
+			Sensitivity: {metrics.avg_sensitivity}, IoU: {metrics.avg_iou} , HD: {metrics.avg_hausdorff}, HD95: {metrics.avg_hd95}')
 		self._update_metricRecords("Validation",metrics)
 	
 	def train_epoch(self):
@@ -186,9 +186,9 @@ class Solver(object):
 
 	# Print the log info
 		print(f'[Training] [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.avg_dice}, \
-				Recall: {metrics.avg_recall}, Precision: {metrics.avg_precision}, Specificity: {metrics.avg_specificity}, \
-				Sensitivity: {metrics.avg_sensitivity}, IoU: {metrics.avg_iou} , \
-				HD: {metrics.avg_hausdorff}, HD95: {metrics.avg_hd95}')
+			Recall: {metrics.avg_recall}, Precision: {metrics.avg_precision}, Specificity: {metrics.avg_specificity}, \
+			Sensitivity: {metrics.avg_sensitivity}, IoU: {metrics.avg_iou} , \
+			HD: {metrics.avg_hausdorff}, HD95: {metrics.avg_hd95}')
 		self._update_metricRecords("Training",metrics)
 
 	def train_model(self):
