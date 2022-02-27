@@ -89,7 +89,7 @@ def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',i
 	dataset = ImageFolder(root = image_path, image_size =image_size, mode=mode,augmentation_prob=augmentation_prob, is_multiorgan=is_multiorgan)
 	data_loader = data.DataLoader(dataset=dataset,
 								  batch_size=batch_size,
-								  shuffle=False,
+								  shuffle=True,
 								  num_workers=num_workers)
 	return data_loader
 	# return dataset

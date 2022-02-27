@@ -24,7 +24,7 @@ class Solver(object):
 		self.optimizer = None
 		self.img_ch = config.img_ch
 		self.output_ch = config.output_ch
-		self.criterion = DiceBCELoss()
+		self.criterion = DiceLoss()
 		self.min_valid_loss = np.inf	
 		self.model_name = config.model_name				
 
@@ -61,9 +61,9 @@ class Solver(object):
 			self.unet = R2AttU_Net(img_ch=self.img_ch,output_ch=self.output_ch,t=self.t)
 			
 		# self.grad_scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
-		# self.optimizer = optim.Adam(list(self.unet.parameters()),
-		# 							 self.lr, [self.beta1, self.beta2])
-		self.optimizer = optim.RMSprop(self.unet.parameters(), lr=self.lr, weight_decay=1e-8, momentum=0.9)
+		self.optimizer = optim.Adam(list(self.unet.parameters()),
+									 self.lr, [self.beta1, self.beta2])
+		# self.optimizer = optim.RMSprop(self.unet.parameters(), lr=self.lr, weight_decay=1e-8, momentum=0.9)
 		self.unet.to(self.device)
 
 	def save_validation_results(self, image, pred_mask, true_mask,epoch):
@@ -226,8 +226,8 @@ class Solver(object):
 		self.wr_train = csv.writer(training_log)
 		self.wr_valid = csv.writer(validation_log)
 		
-		self.wr_valid.writerow(["epoch","lr" "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hausdorff_distance","hausdorff_distance_95"])
-		self.wr_train.writerow(["epoch","lr" "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hausdorff_distance","hausdorff_distance_95"])
+		self.wr_valid.writerow(["epoch","lr", "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hausdorff_distance","hausdorff_distance_95"])
+		self.wr_train.writerow(["epoch","lr", "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hausdorff_distance","hausdorff_distance_95"])
 		
 
 		# U-Net Train
@@ -248,6 +248,7 @@ class Solver(object):
 				# Decay learning rate
 				if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
 					lr -= (self.lr / float(self.num_epochs_decay))
+					self.lr = lr # I did not update the rearning rate decay in other experiments
 					for param_group in self.optimizer.param_groups:
 						param_group['lr'] = lr
 					print ('Decay learning rate to lr: {}.'.format(lr))

@@ -11,9 +11,26 @@ import csv
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import argparse
-from data_loader import get_loader
+from loaders.data_loader import get_loader
+from utils_metrics import AverageMeter
 
+def _update_metricRecords(writer,wr_valid, mode,metric, batch):	
 
+		# writer.add_scalars("loss", {mode:metric.avg_loss}, batch)
+		writer.add_scalars("recall", {mode:metric.recall}, batch)
+		writer.add_scalars("sensitivity", {mode:metric.sensitivity}, batch)
+		writer.add_scalars("specificity", {mode:metric.specificity}, batch)
+		writer.add_scalars("dice", {mode:metric.dice}, batch)
+		writer.add_scalars("jaccard", {mode:metric.iou}, batch)
+		writer.add_scalars("hausdorff", {mode:metric.hausdorff}, batch)
+		writer.add_scalars("hausforff_95", {mode:metric.hd95}, batch)
+		wr_valid.writerow(
+			[
+			    batch, 
+				metric.precision, metric.recall, metric.sensitivity, 
+				metric.specificity, metric.dice, metric.iou,
+				metric.hausdorff,metric.hd95
+			])
 def build_model(cfg, device):
     """Build generator and discriminator."""
     if cfg.model_type =='U_Net':
@@ -68,12 +85,15 @@ def test(cfg, unet_path,test_loader, test_save_path, device ="cuda"):
         encoding='utf-8', 
         newline=''
     )
+    writer = SummaryWriter()
     wr_test = csv.writer(testing_log)
+    wr_test.writerow(["batch", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hausdorff_distance","hausdorff_distance_95"])
 
     # unet_path = os.path.join(unet_path, cfg.model_name)
     # del cfg.unet
     print(unet_path)
     unet = build_model(cfg,device)
+    metrics = AverageMeter()
     if os.path.isfile(unet_path):
         # Load the pretrained Encoder
         unet.load_state_dict(torch.load(unet_path))
@@ -81,7 +101,6 @@ def test(cfg, unet_path,test_loader, test_save_path, device ="cuda"):
     unet.eval()
     test_len = len(test_loader)
     length = 0
-    dice_c = iou = 0.	
     for (images, true_masks) in tqdm(
 			test_loader, 
 			total = test_len, 
@@ -92,12 +111,22 @@ def test(cfg, unet_path,test_loader, test_save_path, device ="cuda"):
         true_masks = true_masks.to(device)
         with torch.no_grad():
             pred_masks = unet(images)
-        _, _, _, _, dice_c, iou =  collect_metrics(true_masks,pred_masks)
+        length += int(images.size(0)/cfg.batch_size)
+        # print(length)
+        metrics.update(0, true_masks, pred_masks, images.size(0)/cfg.batch_size)
+        _update_metricRecords(writer,wr_test, "Test",metrics, length)
+        save_validation_results(cfg,images, pred_masks, true_masks,length)
         
-        wr_test.writerow([dice_c, iou])
-        length += images.size(0)/cfg.batch_size
-        save_validation_results(cfg,images, pred_masks, true_masks,test_len-length)
-
+    wr_test.writerow([
+        "avg_precision", "avg_recall", "avg_sensitivity", 
+        "avg_specificity", "avg_dice", "avg_iou",
+        "avg_hd","avg_hd95"
+        ])
+    wr_test.writerow([ 
+        metrics.avg_precision, metrics.avg_recall, metrics.avg_sensitivity, 
+        metrics.avg_specificity, metrics.avg_dice, metrics.avg_iou,
+        metrics.avg_hausdorff,metrics.avg_hd95
+        ])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -113,10 +142,10 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=4)
     # misc
     parser.add_argument('--mode', type=str, default='test')
-    parser.add_argument('--model_name', type=str, default='U_Net-80-0.0004-52.pkl')
+    parser.add_argument('--model_name', type=str, default='U_Net-80-0.0010-13_4_batch.pkl')
     parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
     parser.add_argument('--model_path', type=str, default='.\\models')
-    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\RECTUM\\automatic_segmentation\\Dataset\\RECTUM\\test')
+    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\test')
     parser.add_argument('--result_path', type=str, default='./result/')
 
     parser.add_argument('--cuda_idx', type=int, default=1)
