@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import torch
 from torch.utils import data
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
@@ -7,11 +8,14 @@ import pydicom as dicom
 import cv2 as cv
 from loaders.preprocessing import crop_and_pad, limiting_filter,normalize_intensity
 
+
+
 class ImageFolder(data.Dataset):
-	def __init__(self, root,image_size=256,mode='train',augmentation_prob=0.4, is_multiorgan = False):
+	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.4, is_multiorgan = True):
 		"""Initializes image paths and preprocessing module."""
 		self.root = root
 		self.is_multiorgan = is_multiorgan
+		self.classes = classes
 		# GT : Ground Truth
 		img_path = os.path.join(root,"image")
 		# self.GT_paths = root[:-1]+'_GT/'
@@ -36,15 +40,22 @@ class ImageFolder(data.Dataset):
 		self.mode = mode
 		print("image count in {} path :{}".format(self.mode,len(self.image_paths)))
 
+	def mask_to_class(self,mask):
+		for k in self.classes:
+			mask[mask==k] = self.classes[k]
+		# plt.imshow(mask)
+		# plt.show()
+		return mask
+		
 	def __getitem__(self, index):
 		"""Reads an image from a file and preprocesses it and returns."""
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
-		# print(filename)
 		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + 'mask.png')
 		to_tensor = T.Compose([
 			T.ToTensor(),
 		])
+
 
 
 		image_file = dicom.dcmread(image_path)
@@ -53,59 +64,58 @@ class ImageFolder(data.Dataset):
 		GT = cv.imread(GT_path, cv.IMREAD_GRAYSCALE)
 		image = image/np.max(image)
 		image = image.astype(np.float32)
-
-		GT = GT/np.max(GT)
-
-		if not self.is_multiorgan:
-			GT = GT > 0.5
-
-		GT = GT.astype(np.float32)	
-
-
-		# if self.mode == "test":
 		# Resize keeping the same geometry
 		image = crop_and_pad(image,self.image_size,display=False)
 		GT =crop_and_pad(GT, self.image_size)
 
+		if not self.is_multiorgan:
+			GT = GT/np.max(GT)
+			GT = GT > 0.5
+			GT = GT.astype(np.float32)	
+		else:
+			GT = self.mask_to_class(GT)
+
+		# if self.mode == "test":
+		
 
 		
 		image = np.expand_dims(image, axis=-1)
 		GT = np.expand_dims(GT,axis=-1)
 		image = to_tensor(image)
-		# image = normalize_intensity(image, normalization="min")
 
 		GT = to_tensor(GT)
-		
-		
-		return image, GT
+				
+		return image, GT.type(torch.long)
 
 	def __len__(self):
 		"""Returns the total number of font files."""
 		return len(self.image_paths)
 
-def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',is_multiorgan=True, augmentation_prob=0.4):
+def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',is_multiorgan=True, augmentation_prob=0.4, classes = None):
 	"""Builds and returns Dataloader."""
 	
-	dataset = ImageFolder(root = image_path, image_size =image_size, mode=mode,augmentation_prob=augmentation_prob, is_multiorgan=is_multiorgan)
+	dataset = ImageFolder(root = image_path, image_size =image_size, mode=mode,augmentation_prob=augmentation_prob, is_multiorgan=is_multiorgan, classes=classes)
 	data_loader = data.DataLoader(dataset=dataset,
 								  batch_size=batch_size,
 								  shuffle=True,
 								  num_workers=num_workers)
 	return data_loader
-	# return dataset
+# 	return dataset
 
 # import matplotlib.pyplot as plt 
-# path = "/Users/manoskoutoulakis/Desktop/Sample/016_PRO_pCT_CGFL_ok/results"
-# dataload = get_loader(path,256,1,is_multiorgan=True)
+# path='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train'
+
+# dataload = get_loader(path,256,1,is_multiorgan=True,mode="train",classes = ["BACKGROUND", "TETE_FEMORALE_G", "TETE_FEMORALE_D","VESSIE","RECTUM"])
+
 # # image,mask = dataload.__getitem__(55)
 # for (image,mask) in dataload:
 # 	# transforms = T.Compose([T.ToPILImage()])
 # 	image = image.data.cpu().detach().numpy().squeeze()
 # 	mask = mask.data.cpu().detach().numpy().squeeze()
 # 	# print (np.unique(mask))
-
-# 	plt.imshow(image, cmap="gray")
-# 	plt.imshow(mask, cmap="jet", alpha= 0.3 )
+# 	fig, (ax1,ax2) = plt.subplots(1,2)
+# 	ax1.imshow(image, cmap="gray")
+# 	ax2.imshow(mask, cmap="jet", alpha= 0.3 )
 
 # 	plt.show()
 

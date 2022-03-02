@@ -13,22 +13,22 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 
-
 class MultiSolver(object):
-	def __init__(self, config, train_loader, valid_loader, test_loader):
+	def __init__(self, config, train_loader, valid_loader, test_loader, classes):
 
 		# Data loader
-		self.classes = config.classes.list
+
 		self.train_loader = train_loader
 		self.valid_loader = valid_loader
 		self.test_loader = test_loader
-
+		self.classes = classes
+		del self.classes[0] # Delete the background label
 		# Models
 		self.unet = None
 		self.optimizer = None
 		self.img_ch = config.img_ch
 		self.output_ch = config.output_ch
-		self.criterion = DiceBCELoss()
+		self.criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
 		self.min_valid_loss = np.inf	
 		self.model_name = config.model_name				
 
@@ -67,18 +67,51 @@ class MultiSolver(object):
 		# self.grad_scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
 		# self.optimizer = optim.Adam(list(self.unet.parameters()),
 		# 							 self.lr, [self.beta1, self.beta2])
-		self.optimizer = optim.RMSprop(self.unet.parameters(), lr=self.lr, weight_decay=1e-8, momentum=0.9)
+		self.optimizer = optim.Adam(list(self.unet.parameters()),
+									 self.lr, [self.beta1, self.beta2])
 		self.unet.to(self.device)
 
+	def classes_to_mask(self,mask):
+		"""Converts the labeled pixels to range 0-255
+		"""
+		for index, k in enumerate(self.classes):
+			mask[mask==index] = int(255/index) if index != 0 else 0
+
+
+		return mask.type(torch.float)
+
+	def give_colour(out):  # --> Not used
+		class_to_color = [torch.tensor([1.0, 0.0, 0.0]), ...]
+		output = torch.zeros(1, 3, out.size(-2), out.size(-1), dtype=torch.float)
+		for class_idx, color in enumerate(class_to_color):
+			mask = out[:,class_idx,:,:] == torch.max(out, dim=1)[0]
+			mask = mask.unsqueeze(1) # should have shape 1, 1, 100, 100
+			curr_color = color.reshape(1, 3, 1, 1)
+			segment = mask*color # should have shape 1, 3, 100, 100
+			output += segment
+		return output
+
 	def save_validation_results(self, image, pred_mask, true_mask,epoch):
+		print(f"[BEFORE]   unique pred: {torch.unique(pred_mask)}, unique true: {torch.unique(true_mask)}")
+		print(f"image : {image.shape} , pred_masks : {pred_mask.shape}, true_mask: {true_mask.shape}")
+
+		if len(self.classes)>1:
+			pred_mask = torch.argmax(pred_mask,dim=1)
+			pred_mask = self.classes_to_mask(pred_mask)
+			# true_mask =torch.argmax(true_mask,dim=1)
+			true_mask[0] = self.classes_to_mask(true_mask[0])
+			true_mask = true_mask.to(torch.float32)
+		print(f"unique pred: {torch.unique(pred_mask)}, unique true: {torch.unique(true_mask)}")
 		image = image.data.cpu()
 		pred_mask = pred_mask.data.cpu()
 		true_mask = true_mask.data.cpu()
+		pred_mask.unsqueeze(1)
+		print(f"image : {image.shape} , pred_masks : {pred_mask.shape}, true_mask: {true_mask.shape}")
 		torchvision.utils.save_image(
 			image,
 			os.path.join(
 				self.result_path,
-				'%s_valid_%d_result_INPUT.png'%(self.model_type,epoch+1
+				'%s_valid_%d_result_INPUT.jpg'%(self.model_type,epoch+1
 				)
 			)
 		)
@@ -86,7 +119,7 @@ class MultiSolver(object):
 			pred_mask,
 			os.path.join(
 				self.result_path,
-				'%s_valid_%d_result_PRED.png'%(self.model_type,epoch+1
+				'%s_valid_%d_result_PRED.jpg'%(self.model_type,epoch+1
 				)
 			)
 		)
@@ -94,28 +127,35 @@ class MultiSolver(object):
 			true_mask,
 			os.path.join(
 				self.result_path,
-				'%s_valid_%d_result_GT.png'%(self.model_type,epoch+1
+				'%s_valid_%d_result_GT.jpg'%(self.model_type,epoch+1
 				)
 			)
 		)
 
-	def _update_metricRecords(self,mode,metric):	
-
-		self.writer.add_scalars("loss", {mode:metric.avg_loss}, self.epoch)
-		self.writer.add_scalars("recall", {mode:metric.avg_recall}, self.epoch)
-		self.writer.add_scalars("sensitivity", {mode:metric.avg_sensitivity}, self.epoch)
-		self.writer.add_scalars("specificity", {mode:metric.avg_specificity}, self.epoch)
-		self.writer.add_scalars("dice", {mode:metric.avg_dice}, self.epoch)
-		self.writer.add_scalars("jaccard", {mode:metric.avg_iou}, self.epoch)
-		self.writer.add_scalars("hausdorff", {mode:metric.avg_hausdorff}, self.epoch)
-		self.writer.add_scalars("hausforff_95", {mode:metric.avg_hd95}, self.epoch)
-		self.wr_valid.writerow(
-			[
-				self.epoch+1,self.lr, metric.avg_loss, 
-				metric.avg_precision, metric.avg_recall, metric.avg_sensitivity, 
-				metric.avg_specificity, metric.avg_dice, metric.avg_iou,
-				metric.avg_hausdorff,metric.avg_hd95
-			])
+	def _update_metricRecords(self,mode,metric, classes=None):	
+		avg_metrics = [
+					self.epoch+1,self.lr, metric.avg_loss, 
+					metric.all_precision, metric.all_recall, metric.all_sensitivity, 
+					metric.all_specificity, metric.all_dice, metric.all_iou,
+					metric.all_hd,metric.all_hd95
+				]
+		if classes:
+			print(classes)
+			for index in range(len(classes.items())):
+				avg_metrics.append(metric.avg_iou[index])
+				avg_metrics.append(metric.avg_dice[index])
+				avg_metrics.append(metric.avg_hd[index])
+			self.writer.add_scalars("loss", {mode:metric.avg_loss}, self.epoch)
+			self.writer.add_scalars("recall", {mode:metric.all_recall}, self.epoch)
+			self.writer.add_scalars("sensitivity", {mode:metric.all_sensitivity}, self.epoch)
+			self.writer.add_scalars("specificity", {mode:metric.all_specificity}, self.epoch)
+			self.writer.add_scalars("dice", {mode:metric.all_dice}, self.epoch)
+			self.writer.add_scalars("jaccard", {mode:metric.all_iou}, self.epoch)
+			self.writer.add_scalars("hausdorff", {mode:metric.all_hd}, self.epoch)
+			self.writer.add_scalars("hausforff_95", {mode:metric.all_hd95}, self.epoch)
+			self.wr_valid.writerow( 
+				avg_metrics
+				)
 	
 
 
@@ -143,61 +183,68 @@ class MultiSolver(object):
 			leave=False):
 
 			image = image.to(self.device,dtype=torch.float32)
-			true_mask = true_mask.to(self.device, dtype=torch.float32)
+			true_mask = true_mask.to(self.device,dtype=torch.long)
 			with torch.no_grad():		
 				pred_mask = self.unet(image)
-				loss = self.criterion(pred_mask,true_mask)
-				# valid_loss += loss.item() * (image.size(0)/self.batch_size)
-			metrics.update(loss.item(), true_mask, pred_mask, image.size(0)/self.batch_size)
-			
-		self.unet.train()
+				if self.output_ch > 1:
+					loss = self.criterion(pred_mask,true_mask[:,0,:,:])
 
+				else:
+					loss = self.criterion(pred_mask,true_mask)
+
+			metrics.update(loss.item(), true_mask, pred_mask, image.size(0)/self.batch_size, classes=self.classes)
+		self.unet.train()
+		print(pred_mask.shape)
 		self.save_validation_results(image, pred_mask, true_mask,self.epoch)
 		if self.min_valid_loss > metrics.avg_loss:
 			print(f'[Validation] Loss Decreased({self.min_valid_loss:.6f}--->{metrics.avg_loss:.6f}) \t Saving The Model')
 			self.min_valid_loss = metrics.avg_loss
 			# Saving State Dict
 			torch.save(self.unet.state_dict(), unet_path)
-		print(f'[Validation] --> Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.avg_dice}, \
-			Recall: {metrics.avg_recall}, Precision: {metrics.avg_precision}, Specificity: {metrics.avg_specificity}, \
-			Sensitivity: {metrics.avg_sensitivity}, IoU: {metrics.avg_iou} , HD: {metrics.avg_hausdorff}, HD95: {metrics.avg_hd95}')
-		self._update_metricRecords("Validation",metrics)
+		print(f'[Validation] --> Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.all_dice}, \
+			Recall: {metrics.all_recall}, Precision: {metrics.all_precision}, Specificity: {metrics.all_specificity}, \
+			Sensitivity: {metrics.all_sensitivity}, IoU: {metrics.all_iou} , HD: {metrics.all_hd}, HD95: {metrics.all_hd95}')
+		self._update_metricRecords("Validation",metrics, self.classes)
 		
 	
 	def train_epoch(self):
 		self.unet.train(True)
-		metrics = AverageMeter()	
+		metrics = AverageMeter()
+
 		epoch_loss_values = list()
 		with tqdm(total=self.n_train, desc=f'Epoch {self.epoch + 1}/{self.num_epochs}', unit='img') as pbar:
 			for i, (image, true_mask) in enumerate(self.train_loader):
 				image = image.to(self.device,dtype=torch.float32)
-				true_mask = true_mask.to(self.device, dtype=torch.float32)
+				true_mask = true_mask.to(self.device, dtype=torch.long)
 
 				assert image.shape[1] == self.img_ch, f'Network has been defined with {self.img_ch} input channels'
 				self.optimizer.zero_grad(set_to_none=True)
 				# with torch.cuda.amp.autocast(enabled=self.amp):
 				pred_mask = self.unet(image)
-				loss = self.criterion(pred_mask,true_mask)
 
+
+				if self.output_ch > 1:
+					loss = self.criterion(pred_mask,true_mask[:,0,:,:])
+				else:
+					loss = self.criterion(pred_mask,true_mask)
 				# Backprop + optimize
 				loss.backward()
 				self.optimizer.step()
-
 				pbar.update(int(image.shape[0]/self.batch_size))
 				self.global_step +=1
-				metrics.update(loss.item(), true_mask, pred_mask, image.size(0))
+				metrics.update(loss.item(), true_mask, pred_mask, image.size(0), classes=self.classes)
 
 				pbar.set_postfix(**{'loss (batch)': loss.item()})
 			epoch_loss_values.append(metrics.avg_loss)
 
 
 		# Print the log info
-		print(f'[Training] [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.avg_dice}, \
-			Recall: {metrics.avg_recall}, Precision: {metrics.avg_precision}, Specificity: {metrics.avg_specificity}, \
-			Sensitivity: {metrics.avg_sensitivity}, IoU: {metrics.avg_iou} , \
-			HD: {metrics.avg_hausdorff}, HD95: {metrics.avg_hd95}')
+		print(f'[Training] [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.all_dice}, \
+			Recall: {metrics.all_recall}, Precision: {metrics.all_precision}, Specificity: {metrics.all_specificity}, \
+			Sensitivity: {metrics.all_sensitivity}, IoU: {metrics.all_iou} , \
+			HD: {metrics.all_hd}, HD95: {metrics.all_hd95}')
 
-		self._update_metricRecords("Training",metrics)
+		self._update_metricRecords("Training",metrics, self.classes)
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
@@ -234,8 +281,12 @@ class MultiSolver(object):
 		self.wr_train = csv.writer(training_log)
 		self.wr_valid = csv.writer(validation_log)
 		
-		self.wr_valid.writerow(["epoch","lr" "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hausdorff_distance","hausdorff_distance_95"])
-		self.wr_train.writerow(["epoch","lr" "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hausdorff_distance","hausdorff_distance_95"])
+		metric_list = ["epoch","lr", "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hd","hd95"]
+		for _, id in self.classes.items():
+			for i in ["dice","iou","hd"]:
+				metric_list.append(f"{id}_{i}")
+		self.wr_valid.writerow(metric_list)
+		self.wr_train.writerow(metric_list)
 		
 
 		# U-Net Train
@@ -249,7 +300,6 @@ class MultiSolver(object):
 			self.n_train = len(self.train_loader)
 			self.global_step = 0
 			self.writer = SummaryWriter()
-			# print("n_train: ",n_train)
 			for epoch in range(self.num_epochs):
 				self.epoch = epoch
 				self.train_epoch()

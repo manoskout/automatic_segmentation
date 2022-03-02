@@ -74,7 +74,7 @@ def crop_and_pad(img,size, display=False):
         # plt.imshow(resizing_func(x, image.shape[0], image.shape[1]), cmap='gray')
         plt.show()
         
-    return result
+    return result.astype(np.float32)
 
 def normalize_intensity(img_tensor, normalization="full_volume_mean", norm_values=(0, 1, 1, 0)):
     """

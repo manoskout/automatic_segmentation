@@ -138,7 +138,7 @@ class Attention_block(nn.Module):
 class U_Net(nn.Module):
     def __init__(self,img_ch=3,output_ch=1):
         super(U_Net,self).__init__()
-        
+        self.output_ch = output_ch
         self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
 
         self.Conv1 = conv_block(ch_in=img_ch,ch_out=64)
@@ -197,7 +197,6 @@ class U_Net(nn.Module):
         d2 = self.Up_conv2(d2)
 
         d1 = self.Conv_1x1(d2)
-
         return d1
 
 
