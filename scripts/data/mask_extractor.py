@@ -4,7 +4,7 @@ import shutil
 import matplotlib.pyplot as plt
 # %matplotlib widget
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 import nibabel as nib
 import os
 import pydicom as dicom
@@ -155,16 +155,18 @@ class MaskBuilder:
   def get_ref_ROI_num(self, segment=""):
     """Return the number of the segment that we want to extract
     """
-    organ_ids=[]
+    organ_ids={}
     if self.is_multiorgan:
         for seg in self.rt_struct.StructureSetROISequence:
-            for oar in self.OARS:
+            for label,oar in enumerate(self.OARS,1):
                 if oar == seg.ROIName.upper():
-                    organ_ids.append(int(seg.ROINumber)-1)
+                    organ_ids[oar]= {"id":int(seg.ROINumber)-1, "label":label}
     else:
         for seg in self.rt_struct.StructureSetROISequence:
             if segment == seg.ROIName:
-                return int(seg.ROINumber)-1 # Because it starts from 0
+              organ_ids["oar"]= oar
+              organ_ids["label"]= 1
+              organ_ids["ROINumber"] = int(seg.ROINumber)-1
     return organ_ids
 
   def save_as_nifti(self,array,patient, path,affine= np.eye(4)):
@@ -173,7 +175,24 @@ class MaskBuilder:
     # print(os.path.join(path, f'{patient}.nii.gz'))
     nib.save(res, os.path.join(path, f'{patient}.nii.gz'))
   
-
+  def save_as_tiff(self,array,patient,index, path):
+    """Save the array of images to a nifti.gz file"""
+    im = Image.fromarray(array)
+    im.save("{}/{}_{}.tiff".format(
+        path,
+        patient,
+        index)
+    )
+  def save_as_dicom(self,slice,patient, index, path):
+    """Save the array of images to a nifti.gz file"""
+    dicom.dcmwrite(
+      "{}/{}_{}.dcm".format(
+        path,
+        patient,
+        index), 
+      slice
+    )
+  
   def clean_mask_data(self,):
     """
     If the patients are more than one it just clean the mask data 
@@ -185,18 +204,19 @@ class MaskBuilder:
     refROInumbers= self.get_ref_ROI_num(self.OARS) 
     slices_ms = [] 
     mask_dict = {}
-    
+    print(refROInumbers.items())
     for index,slice in enumerate(self.series_data,1):
         width, height = self.get_slice_shape(slice)
         mask_dict[slice.SOPInstanceUID] = []
         self.mask_data[str(index)]={}
         if self.rt_struct:
-          for label,oar in enumerate(refROInumbers,1):
-              for contour in self.rt_struct.ROIContourSequence[oar].ContourSequence:
+          for name, oar in refROInumbers.items():
+              for contour in self.rt_struct.ROIContourSequence[oar["id"]].ContourSequence:
                   if hasattr(contour,"ContourImageSequence"):
                       if contour.ContourImageSequence[0].ReferencedSOPInstanceUID == slice.SOPInstanceUID:
+                          # print(f"Label : {label}, OAR: {oar}   OARSSSS : {self.OARS}")
                           mask_coords = self.update_pixel_coords(slice, contour)
-                          mask = poly_to_mask(mask_coords, width=width,height=height,label = label)
+                          mask = poly_to_mask(mask_coords, width=width,height=height,label = oar["label"])
                           mask_dict[slice.SOPInstanceUID].append(mask)                        
                       else:
                           mask = np.zeros((height,width))
@@ -212,22 +232,39 @@ class MaskBuilder:
           
 
 
-  def save_masks(self,patient_path,patient):
-    result_path = os.path.join(patient_path,"nifti")
-    avg_value_of_classes = 255/len(self.OARS)
+  def save_masks(self,patient_path,patient, save_type,result_path):
+    # avg_value_of_classes = 255/len(self.OARS)
+    mri_path = os.path.join(result_path,"mri")
+    mask_path = os.path.join(result_path,"mask")
     if not os.path.exists(result_path):
       os.mkdir(result_path)
+    if not os.path.exists(mri_path):  
+      os.mkdir(mri_path)
+      os.mkdir(mask_path)
+
     masks=[]
     slices = []
     for (index,case) in self.mask_data.items():
       mask= case["mask"] if "mask" in case.keys() and self.rt_struct else None
-
       if mask is not None and len(np.unique(mask))==len(self.OARS)+1: # +1 is because se background
         mask = sum(mask) if mask is not None else None
+        mask = np.where(mask==0, mask, 255/mask).astype(np.uint8) if mask is not None else None
         masks.append(mask) 
-
-        slice = case["slice"].pixel_array
-        slices.append(slice)
+        slice = case["slice"]
+        slices.append(slice.pixel_array)
+        if save_type == "dicom":
+          self.save_as_dicom(
+            slice,
+            patient, 
+            index,
+            mri_path
+          )
+          self.save_as_tiff(
+            mask,
+            patient+"_mask",
+            index,
+            mask_path
+          )
       
       # else:
         # mask =np.array(masks, dtype=np.uint8)
@@ -237,25 +274,25 @@ class MaskBuilder:
       # print(np.unique(mask))
         # slc = case[1]["slice"]
         # mask.save("{}/{}_{}.png".format(mask_path,patient[0:3],case[0]))
-        # dicom.dcmwrite("{}/{}_{}.dcm".format(mri_path,patient[0:3],case[0]), case[1]["slice"])
         # print("Mask saved : {}/{}.png".format(os.path.join(mask_path,segment),case[0]))
-    try:
-      self.save_as_nifti(
-        np.array(masks, dtype=np.uint8).transpose([2,1,0]),
-        patient+"_masks",
-        result_path
+    if save_type == "nifti":
+      try:
+        self.save_as_nifti(
+          np.array(masks, dtype=np.uint8).transpose([2,1,0]),
+          patient+"_masks",
+          result_path
+          )
+        self.save_as_nifti(
+          np.array(slices).transpose([2,1,0]),
+          patient,
+          result_path
+          )
+        print("All files saved succesfully.")
+      except ValueError:
+        print(
+          "Axes do not match array. Probably patient {patient} does not have all the requested organs segmented"
+          .format(patient=patient)
         )
-      self.save_as_nifti(
-        np.array(slices).transpose([2,1,0]),
-        patient,
-        result_path
-        )
-      print("All files saved succesfully.")
-    except ValueError:
-      print(
-        "Axes do not match array. Probably patient {patient} does not have all the requested organs segmented"
-        .format(patient=patient)
-      )
 
     
     
@@ -275,7 +312,7 @@ def main(config):
   if config.delete_nifti:
     clean_existed_masks(DATASET_PATH,"nifti")
     return 0
-  PATIENT_FOLDERS = [patient for patient in get_patient_folder_list(DATASET_PATH)][-16:]
+  PATIENT_FOLDERS = [patient for patient in get_patient_folder_list(DATASET_PATH)]
   # print(PATIENT_FOLDERS)
   doubled_rt_structs=[]
   patient_with_doubled_rt = []
@@ -297,13 +334,15 @@ def main(config):
       struct_path = []
 
     output_path = config.output_path if config.output_path != " " else patient_path
+    if not os.path.exists(output_path):
+      os.mkdir(output_path)
     series,rt_struct = load_dcm_rt_from_path(mri_path,struct_path)
     
     mb = MaskBuilder(DATASET_PATH,series, rt_struct, OARS = OARS, contours_only= config.contours_only)
     roi_names = mb.get_roi_names()
     logging.info(f"Available rois: {roi_names}") if config.include_rt_struct else print("\n")
     mb.create_masks()
-    mb.save_masks(patient_path, patient)
+    mb.save_masks(patient_path, patient, config.save_type, output_path)
     mb.clean_mask_data()
     print("--------------------------------NEXT-------------------------------------")  
   print("--->> Patients that are not yet investigated because of multiple rt_struct: {} \nStruct Path: ".format(patient_with_doubled_rt,doubled_rt_structs)) 
@@ -315,10 +354,10 @@ if __name__ =="__main__":
   parser.add_argument("-d","--dataset-folder", type=str, default="C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset", help="The folder that contains all patients")
   parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"], help="Provide the list with the organs that you want to segment, if the names are known")
   parser.add_argument("--include_rt_struct", action="store_true", help="Create and nii file with mask. Only if the patient contains rt struct file")
-  parser.add_argument("-o", "--output_path", type=str, default= " ", help="The output file is save into the patients folder by default")
+  parser.add_argument("-o", "--output_path", type=str, default= "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass", help="The output file is save into the patients folder by default")
   parser.add_argument("--contours_only", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
   parser.add_argument("--delete_nifti", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
-  
+  parser.add_argument("--save_type", default="dicom", help="[nifti/dicom] Save the output as nifti (series of slice) or dicom (each slice seperately)")
   arguments= parser.parse_args()
   main(arguments)
 

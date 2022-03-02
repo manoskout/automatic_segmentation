@@ -41,7 +41,7 @@ def augment_data(images, masks, existed_imgs, existed_masks, save_path, size= (5
             y = imageio.mimread(os.path.join(existed_masks,y))[0]
 
         if augment == True:
-            aug = VerticalFlip(p=0.5)
+            aug = VerticalFlip(p=0.25)
             augmented = aug(image=x, mask=y)
             x2 = augmented["image"]
             y2 = augmented["mask"]
