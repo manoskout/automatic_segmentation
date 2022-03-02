@@ -90,19 +90,61 @@ class ConfusionMatrix:
 
         return self.test_empty, self.test_full, self.reference_empty, self.reference_full
 
-def collect_metrics(ground_truth: Tensor, predicted: Tensor, num_classes = 1, eps=1e-5):
-    predicted = torch.where(predicted>0,1,0).cpu().detach().numpy().squeeze()
-    ground_truth = torch.where(ground_truth>0,1,0).cpu().detach().numpy().squeeze()
-    precision_v = precision(predicted,ground_truth)
-    recall_v = recall(predicted,ground_truth)
-    specificity_v = specificity(predicted,ground_truth)
-    sensitivity_v = sensitivity(predicted,ground_truth)
-    hausdorff_distance_v = hausdorff_distance(predicted,ground_truth)
-    hausdorff_distance_95_v = hausdorff_distance_95(predicted,ground_truth)
-    dice_c = dice(predicted,ground_truth)
-    iou = jaccard(predicted,ground_truth)
+def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = None, eps=1e-5):
+    """The metrics collector function
+    In binary returns a single float value for each metric.
+    In multiclass return a list containing the values for each class that segmented
+    """
+    # del classes[0] # Delete the background
+    # print(f"METRICS : {classes}")
 
-    return recall_v, precision_v, specificity_v,sensitivity_v, dice_c, iou ,hausdorff_distance_v, hausdorff_distance_95_v
+    # In our test 0 : background, 1: rectum, 2: vessie, 3: femoral_l, 4: femoral_r TODO-> get rid of the hardcoded method
+    # print(f"Predicted before torch.where : {torch.unique(predicted)}")
+    predicted = torch.where(predicted>0,1,0).cpu().detach().numpy()
+    
+    # print(f"Predicted after torch.where : {np.unique(predicted)}")
+    
+    if not classes:
+        ground_truth = torch.where(ground_truth>0,1,0).cpu().detach().numpy()
+        precision_v = precision(predicted,ground_truth)
+        recall_v = recall(predicted,ground_truth)
+        specificity_v = specificity(predicted,ground_truth)
+        sensitivity_v = sensitivity(predicted,ground_truth)
+        hausdorff_distance_v = hausdorff_distance(predicted,ground_truth)
+        hausdorff_distance_95_v = hausdorff_distance_95(predicted,ground_truth)
+        dice_c = dice(predicted,ground_truth)
+        iou = jaccard(predicted,ground_truth)
+
+        return recall_v, precision_v, specificity_v,sensitivity_v, dice_c, iou ,hausdorff_distance_v, hausdorff_distance_95_v
+    else:
+        ground_truth = ground_truth.cpu().detach().numpy()
+        precision_v = []
+        recall_v = []
+        specificity_v = []
+        sensitivity_v = []
+        hausdorff_distance_v = []
+        hausdorff_distance_95_v = []
+        dice_c = []
+        iou = []
+        for item, id in classes.items():            
+            # print(f"{id}, organ: {item}")
+            class_truth = np.where(ground_truth==id, 1, 0)[:,0,:,:]
+            precision_v.append(precision(predicted[:,id,:,:],class_truth))
+            recall_v.append(recall(predicted[:,id,:,:],class_truth))
+            specificity_v.append(specificity(predicted[:,id,:,:],class_truth))
+            sensitivity_v.append(sensitivity(predicted[:,id,:,:],class_truth))
+            hausdorff_distance_v.append(hausdorff_distance(predicted[:,id,:,:],class_truth))
+            hausdorff_distance_95_v.append(hausdorff_distance_95(predicted[:,id,:,:],class_truth))
+            dice_c.append(dice(predicted[:,id,:,:],class_truth))
+            iou.append(jaccard(predicted[:,id,:,:],class_truth))
+        # print(precision_v, recall_v, specificity_v, sensitivity_v, hausdorff_distance_v, hausdorff_distance_95_v, dice_c, iou)
+        return (
+            np.array(recall_v), np.array(precision_v), np.array(specificity_v), 
+            np.array(sensitivity_v),  np.array(dice_c), np.array(iou),
+            np.array(hausdorff_distance_v), np.array(hausdorff_distance_95_v)
+        )
+        
+
 
 
 def hausdorff_distance(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=False, voxel_spacing=None, connectivity=1, **kwargs):
@@ -256,7 +298,7 @@ class DiceBCELoss(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(DiceBCELoss, self).__init__()
 
-    def forward(self, inputs, targets, smooth=1):
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor, smooth: int =1):
         
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = torch.sigmoid(inputs)       
@@ -272,14 +314,11 @@ class DiceBCELoss(nn.Module):
         
         return Dice_BCE
 
-
-
-
 class DiceLoss(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(DiceLoss, self).__init__()
 
-    def forward(self, inputs, targets, smooth=1):
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor, smooth: int=1):
         
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = torch.sigmoid(inputs)       
@@ -297,7 +336,7 @@ class FocalLoss(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(FocalLoss, self).__init__()
 
-    def forward(self, inputs, targets, alpha=0.8, gamma=2, smooth=1):
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor, alpha: float =0.8, gamma: int =2, smooth: int =1):
         
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = torch.sigmoid(inputs)       
@@ -317,7 +356,7 @@ class LogCoshDiceLoss(nn.Module):   # PROBLEMATIC
     def __init__(self,):
         super(LogCoshDiceLoss, self).__init__()
 
-    def forward(self, inputs, targets):
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor):
         
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = torch.sigmoid(inputs)       
@@ -341,7 +380,7 @@ class AverageMeter():
     def reset(self):
         self.loss = 0
         self.iou = 0
-        self.hausdorff = 0
+        self.hd = 0
         self.hd95 = 0
         self.dice = 0
         self.specificity = 0
@@ -351,7 +390,7 @@ class AverageMeter():
 
         self.sum_loss = 0
         self.sum_iou = 0
-        self.sum_hausdorff = 0
+        self.sum_hd = 0
         self.sum_hd95 = 0
         self.sum_dice = 0
         self.sum_specificity = 0
@@ -361,7 +400,7 @@ class AverageMeter():
 
         self.avg_loss = 0
         self.avg_iou = 0
-        self.avg_hausdorff = 0
+        self.avg_hd = 0
         self.avg_hd95 = 0
         self.avg_dice = 0
         self.avg_specificity = 0
@@ -371,12 +410,22 @@ class AverageMeter():
 
         self.count = 0
         
-    def update(self,loss,true_mask, pred_mask, n=1):
-        recall, precision, specificity, sensitivity, dice, iou , hausdorff, hd95 =  collect_metrics(true_mask,pred_mask)
+    def update(self,loss: torch.Tensor,true_mask: torch.Tensor, pred_mask: torch.Tensor , n: int =1, classes: dict = None):
+        """Collects all the metrics and calculate the average
+        There are two different type of metrics [muliclass, binary],
+        we setted the binary as predifined
+        """
+        recall, precision, specificity, sensitivity, dice, iou , hd, hd95 =  collect_metrics(true_mask,pred_mask, classes)
+
+        self.count += n
 
         self.loss = loss
+        self.sum_loss += loss * n
+        self.avg_loss = self.sum_loss / self.count
+
+
         self.iou = iou
-        self.hausdorff = hausdorff
+        self.hd = hd
         self.hd95 = hd95
         self.dice = dice
         self.specificity = specificity
@@ -384,9 +433,10 @@ class AverageMeter():
         self.recall = recall
         self.precision = precision
 
-        self.sum_loss += loss * n
+        
+
         self.sum_iou += iou * n
-        self.sum_hausdorff += hausdorff * n
+        self.sum_hd += hd * n
         self.sum_hd95 += hd95 * n
         self.sum_dice += dice * n
         self.sum_specificity += specificity * n
@@ -394,14 +444,35 @@ class AverageMeter():
         self.sum_recall += recall * n
         self.sum_precision += precision * n
 
-        self.count += n
         
-        self.avg_loss = self.sum_loss / self.count
         self.avg_iou = self.sum_iou / self.count
-        self.avg_hausdorff = self.sum_hausdorff / self.count
+        self.avg_hd = self.sum_hd / self.count
         self.avg_hd95 = self.sum_hd95 / self.count
         self.avg_dice = self.sum_dice / self.count
         self.avg_specificity = self.sum_specificity / self.count
         self.avg_sensitivity = self.sum_sensitivity / self.count
         self.avg_recall = self.sum_recall / self.count
         self.avg_precision = self.sum_precision /self.count
+
+        if classes:
+            # Get the mean from all the classes
+            self.all_iou = self.avg_iou.mean()
+            self.all_hd = self.avg_hd.mean()
+            self.all_hd95 = self.avg_hd95.mean()
+            self.all_dice = self.avg_dice.mean()
+            self.all_specificity = self.avg_specificity.mean()
+            self.all_sensitivity = self.avg_sensitivity.mean()
+            self.all_recall = self.avg_recall.mean()
+            self.all_precision = self.avg_precision.mean()
+        else:
+            # TODO -> make it more readable 
+            self.all_iou = self.avg_iou
+            self.all_hd = self.avg_hd
+            self.all_hd95 = self.avg_hd95
+            self.all_dice = self.avg_dice
+            self.all_specificity = self.avg_specificity
+            self.all_sensitivity = self.avg_sensitivity
+            self.all_recall = self.avg_recall
+            self.all_precision = self.avg_precision
+        print(f"\n IOU: {self.iou}, of all classes: {self.all_iou}, Images :{self.count}, Sum: {self.sum_iou}, Avg: {self.avg_iou}")
+        
