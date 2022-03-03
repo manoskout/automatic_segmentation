@@ -474,5 +474,5 @@ class AverageMeter():
             self.all_sensitivity = self.avg_sensitivity
             self.all_recall = self.avg_recall
             self.all_precision = self.avg_precision
-        print(f"\n IOU: {self.iou}, of all classes: {self.all_iou}, Images :{self.count}, Sum: {self.sum_iou}, Avg: {self.avg_iou}")
+        #print(f"n IOU: {self.iou}, of all classes: {self.all_iou}, Images :{self.count}, Sum: {self.sum_iou}, Avg: {self.avg_iou}")
         

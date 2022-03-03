@@ -88,13 +88,13 @@ if __name__ == '__main__':
 
     
     # model hyper-parameters
-    parser.add_argument('--type', type=str, default="binary")
+    parser.add_argument('--type', type=str, default="multiclass")
     parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--t', type=int, default=3, help='t for Recurrent step of R2U_Net or R2AttU_Net')  
     # training hyper-parameters
     parser.add_argument('--img_ch', type=int, default=1)
-    parser.add_argument('--output_ch', type=int, default=1)
-    parser.add_argument('--num_epochs', type=int, default=100)
+    parser.add_argument('--output_ch', type=int, default=5)
+    parser.add_argument('--num_epochs', type=int, default=10)
     parser.add_argument('--num_epochs_decay', type=int, default=70)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--num_workers', type=int, default=4)
