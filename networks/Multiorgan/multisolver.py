@@ -5,7 +5,8 @@ import torch
 torch.cuda.empty_cache()
 import torchvision
 from torch import optim
-from utils_metrics import DiceBCELoss,DiceLoss,FocalLoss, AverageMeter
+from utils_metrics import AverageMeter
+from losses import DiceLoss
 from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
@@ -28,7 +29,10 @@ class MultiSolver(object):
 		self.optimizer = None
 		self.img_ch = config.img_ch
 		self.output_ch = config.output_ch
-		self.criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
+		# Using this loss we dont have to perform one_hot is already implemented inside the function
+		# self.criterion = torch.nn.CrossEntropyLoss()
+		self.criterion = DiceLoss(mode=config.type)  
+		  
 		self.min_valid_loss = np.inf	
 		self.model_name = config.model_name				
 
@@ -65,8 +69,7 @@ class MultiSolver(object):
 			self.unet = R2AttU_Net(img_ch=self.img_ch,output_ch=self.output_ch,t=self.t)
 			
 		# self.grad_scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
-		# self.optimizer = optim.Adam(list(self.unet.parameters()),
-		# 							 self.lr, [self.beta1, self.beta2])
+
 		self.optimizer = optim.Adam(list(self.unet.parameters()),
 									 self.lr, [self.beta1, self.beta2])
 		self.unet.to(self.device)
