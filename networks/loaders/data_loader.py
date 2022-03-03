@@ -1,4 +1,6 @@
 from math import degrees
+import warnings
+warnings.filterwarnings("ignore") # temporal
 import os
 import numpy as np
 import torch
@@ -9,7 +11,7 @@ from torchvision.transforms import functional as F
 import pydicom as dicom
 import cv2 as cv
 import torchio as tio
-from loader.preprocessing import crop_and_pad, limiting_filter
+from loaders.preprocessing import crop_and_pad, limiting_filter
 
 
 
@@ -67,7 +69,7 @@ class ImageFolder(data.Dataset):
 			tio.RandomElasticDeformation(
 				p=0.5,
 				num_control_points=7,  # or just 7
-    			locked_borders=2,),
+    			locked_borders=1,),
 		])
 		random_bias = tio.Compose([
 			# tio.RandomElasticDeformation(
