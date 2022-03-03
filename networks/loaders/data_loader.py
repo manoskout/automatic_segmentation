@@ -16,11 +16,12 @@ from loaders.preprocessing import crop_and_pad, limiting_filter
 
 
 class ImageFolder(data.Dataset):
-	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.4, is_multiorgan = True):
+	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.3, is_multiorgan = True):
 		"""Initializes image paths and preprocessing module."""
 		self.root = root
 		self.is_multiorgan = is_multiorgan
 		self.classes = classes
+		self.augmentation_prob = augmentation_prob
 		# GT : Ground Truth
 		img_path = os.path.join(root,"image")
 		# self.GT_paths = root[:-1]+'_GT/'
@@ -61,13 +62,13 @@ class ImageFolder(data.Dataset):
 			T.ToTensor(),
 		])
 		trans = A.Compose([
-			A.Rotate(limit=(-15,15),p=0.5),
+			A.Rotate(limit=(-15,15),p=self.augmentation_prob),
 			# A.VerticalFlip(p=0.5), # Possibility to cause problems with the rectum and bladder
 		])
 		# This transform is only used for the MRI
 		deformation = tio.Compose([
 			tio.RandomElasticDeformation(
-				p=0.5,
+				p=self.augmentation_prob,
 				num_control_points=7,  # or just 7
     			locked_borders=1,),
 		])
@@ -76,7 +77,7 @@ class ImageFolder(data.Dataset):
 			# 	num_control_points=7,  # or just 7
     		# 	locked_borders=2,),
 			
-			tio.RandomBiasField(p=0.5)
+			tio.RandomBiasField(p=self.augmentation_prob)
 		])
 
 
