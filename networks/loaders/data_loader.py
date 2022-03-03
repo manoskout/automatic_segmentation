@@ -1,12 +1,15 @@
+from math import degrees
 import os
 import numpy as np
 import torch
 from torch.utils import data
+import albumentations as A
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
 import pydicom as dicom
 import cv2 as cv
-from loaders.preprocessing import crop_and_pad, limiting_filter,normalize_intensity
+import torchio as tio
+from preprocessing import crop_and_pad, limiting_filter
 
 
 
@@ -55,6 +58,24 @@ class ImageFolder(data.Dataset):
 		to_tensor = T.Compose([
 			T.ToTensor(),
 		])
+		trans = A.Compose([
+			A.Rotate(limit=(-15,15),p=0.5),
+			# A.VerticalFlip(p=0.5), # Possibility to cause problems with the rectum and bladder
+		])
+		# This transform is only used for the MRI
+		deformation = tio.Compose([
+			tio.RandomElasticDeformation(
+				p=0.5,
+				num_control_points=7,  # or just 7
+    			locked_borders=2,),
+		])
+		random_bias = tio.Compose([
+			# tio.RandomElasticDeformation(
+			# 	num_control_points=7,  # or just 7
+    		# 	locked_borders=2,),
+			
+			tio.RandomBiasField(p=0.5)
+		])
 
 
 
@@ -81,9 +102,20 @@ class ImageFolder(data.Dataset):
 		
 		image = np.expand_dims(image, axis=-1)
 		GT = np.expand_dims(GT,axis=-1)
-		image = to_tensor(image)
+		augmented={}
+		if self.mode == "train": 
+			augmented = trans(image=image, mask=GT)
+		else:
+			augmented["image"] = image
+			augmented["mask"] = GT
+		
+		# I used expand dims because the tranformation in torch io applied in 3D volumes
+		image = random_bias(np.expand_dims(augmented["image"], axis=0))
+		image = deformation(image)
+		GT = deformation(np.expand_dims(augmented["mask"], axis=0))
 
-		GT = to_tensor(GT)
+		image = to_tensor(image.squeeze(axis=-1)).permute(1,2,0)
+		GT = to_tensor(GT.squeeze(axis=-1)).permute(1,2,0)
 				
 		return image, GT.type(torch.long)
 
@@ -99,23 +131,23 @@ def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',i
 								  batch_size=batch_size,
 								  shuffle=True,
 								  num_workers=num_workers)
-	return data_loader
-# 	return dataset
+	# return data_loader
+	return dataset
 
-# import matplotlib.pyplot as plt 
-# path='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train'
+import matplotlib.pyplot as plt 
+path='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train'
+classes = {255: 1, 127: 2, 85: 3, 63: 4}
+dataload = get_loader(path,256,1,is_multiorgan=True,mode="train",classes =classes)
 
-# dataload = get_loader(path,256,1,is_multiorgan=True,mode="train",classes = ["BACKGROUND", "TETE_FEMORALE_G", "TETE_FEMORALE_D","VESSIE","RECTUM"])
+# image,mask = dataload.__getitem__(55)
+for (image,mask) in dataload:
+	# transforms = T.Compose([T.ToPILImage()])
+	image = image.data.cpu().detach().numpy().squeeze()
+	mask = mask.data.cpu().detach().numpy().squeeze()
+	# print (np.unique(mask))
+	fig, ax1 = plt.subplots(1,1)
+	ax1.imshow(image, cmap="gray")
+	ax1.imshow(mask, cmap="jet", alpha= 0.1 )
 
-# # image,mask = dataload.__getitem__(55)
-# for (image,mask) in dataload:
-# 	# transforms = T.Compose([T.ToPILImage()])
-# 	image = image.data.cpu().detach().numpy().squeeze()
-# 	mask = mask.data.cpu().detach().numpy().squeeze()
-# 	# print (np.unique(mask))
-# 	fig, (ax1,ax2) = plt.subplots(1,2)
-# 	ax1.imshow(image, cmap="gray")
-# 	ax2.imshow(mask, cmap="jet", alpha= 0.3 )
-
-# 	plt.show()
+	plt.show()
 

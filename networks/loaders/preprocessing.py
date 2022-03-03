@@ -75,36 +75,3 @@ def crop_and_pad(img,size, display=False):
         plt.show()
         
     return result.astype(np.float32)
-
-def normalize_intensity(img_tensor, normalization="full_volume_mean", norm_values=(0, 1, 1, 0)):
-    """
-    Accepts an image tensor and normalizes it
-    :param normalization: choices = "max", "mean" , type=str
-    """
-    if normalization == "mean":
-
-        mask = img_tensor.ne(0.0)
-        desired = img_tensor[mask]
-        mean_val, std_val = desired.mean(), desired.std()
-        img_tensor = (img_tensor - mean_val) / std_val
-
-    elif normalization == "max":
-        max_val, _ = torch.max(img_tensor)
-        img_tensor = img_tensor / max_val
-    elif normalization == 'brats':
-        # print(norm_values)
-        normalized_tensor = (img_tensor.clone() - norm_values[0]) / norm_values[1]
-        final_tensor = torch.where(img_tensor == 0., img_tensor, normalized_tensor)
-        final_tensor = 100.0 * ((final_tensor.clone() - norm_values[3]) / (norm_values[2] - norm_values[3])) + 10.0
-        x = torch.where(img_tensor == 0., img_tensor, final_tensor)
-        return x
-
-    elif normalization == 'full_volume_mean':
-        img_tensor = (img_tensor.clone() - norm_values[0]) / norm_values[1]
-
-    elif normalization == 'max_min':
-        img_tensor = (img_tensor - norm_values[3]) / ((norm_values[2] - norm_values[3]))
-
-    elif normalization == None:
-        img_tensor = img_tensor
-    return img_tensor
