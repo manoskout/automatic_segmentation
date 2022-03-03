@@ -107,17 +107,18 @@ class ImageFolder(data.Dataset):
 		augmented={}
 		if self.mode == "train": 
 			augmented = trans(image=image, mask=GT)
-		else:
-			augmented["image"] = image
-			augmented["mask"] = GT
-		
-		# I used expand dims because the tranformation in torch io applied in 3D volumes
-		image = random_bias(np.expand_dims(augmented["image"], axis=0))
-		image = deformation(image)
-		GT = deformation(np.expand_dims(augmented["mask"], axis=0))
+			# I used expand dims because the tranformation in torch io applied in 3D volumes
+			image = random_bias(np.expand_dims(augmented["image"], axis=0))
+			image = deformation(image)
+			GT = deformation(np.expand_dims(augmented["mask"], axis=0))
 
-		image = to_tensor(image.squeeze(axis=-1)).permute(1,2,0)
-		GT = to_tensor(GT.squeeze(axis=-1)).permute(1,2,0)
+			image = to_tensor(image.squeeze(axis=-1)).permute(1,2,0)
+			GT = to_tensor(GT.squeeze(axis=-1)).permute(1,2,0)
+		else:
+			image = to_tensor(image)
+			GT = to_tensor(GT)
+		
+		
 				
 		return image, GT.type(torch.long)
 
