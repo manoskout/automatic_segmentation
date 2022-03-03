@@ -9,7 +9,7 @@ from torchvision.transforms import functional as F
 import pydicom as dicom
 import cv2 as cv
 import torchio as tio
-from preprocessing import crop_and_pad, limiting_filter
+from loader.preprocessing import crop_and_pad, limiting_filter
 
 
 
@@ -131,23 +131,23 @@ def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',i
 								  batch_size=batch_size,
 								  shuffle=True,
 								  num_workers=num_workers)
-	# return data_loader
-	return dataset
+	return data_loader
+# 	return dataset
 
-import matplotlib.pyplot as plt 
-path='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train'
-classes = {255: 1, 127: 2, 85: 3, 63: 4}
-dataload = get_loader(path,256,1,is_multiorgan=True,mode="train",classes =classes)
+# import matplotlib.pyplot as plt 
+# path='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train'
+# classes = {255: 1, 127: 2, 85: 3, 63: 4}
+# dataload = get_loader(path,256,1,is_multiorgan=True,mode="train",classes =classes)
 
-# image,mask = dataload.__getitem__(55)
-for (image,mask) in dataload:
-	# transforms = T.Compose([T.ToPILImage()])
-	image = image.data.cpu().detach().numpy().squeeze()
-	mask = mask.data.cpu().detach().numpy().squeeze()
-	# print (np.unique(mask))
-	fig, ax1 = plt.subplots(1,1)
-	ax1.imshow(image, cmap="gray")
-	ax1.imshow(mask, cmap="jet", alpha= 0.1 )
+# # image,mask = dataload.__getitem__(55)
+# for (image,mask) in dataload:
+# 	# transforms = T.Compose([T.ToPILImage()])
+# 	image = image.data.cpu().detach().numpy().squeeze()
+# 	mask = mask.data.cpu().detach().numpy().squeeze()
+# 	# print (np.unique(mask))
+# 	fig, ax1 = plt.subplots(1,1)
+# 	ax1.imshow(image, cmap="gray")
+# 	ax1.imshow(mask, cmap="jet", alpha= 0.1 )
 
-	plt.show()
+# 	plt.show()
 
