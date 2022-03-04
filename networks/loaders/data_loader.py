@@ -16,7 +16,7 @@ from loaders.preprocessing import crop_and_pad, limiting_filter
 
 
 class ImageFolder(data.Dataset):
-	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.3, is_multiorgan = True):
+	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.4, is_multiorgan = True):
 		"""Initializes image paths and preprocessing module."""
 		self.root = root
 		self.is_multiorgan = is_multiorgan
@@ -33,15 +33,6 @@ class ImageFolder(data.Dataset):
 				os.listdir(img_path)
 			)
 		)
-		# A useless and complicated script to do some tests
-		# self.image_paths =sorted(
-		# 	self.image_paths, 
-		# 	key= lambda s: int(
-		# 		os.path.basename(s)
-		# 		.split("_")[1]
-		# 		.split(".")[0]
-		# 	)
-		# )
 		self.image_size = (image_size,image_size)
 		self.mode = mode
 		print("image count in {} path :{}".format(self.mode,len(self.image_paths)))
@@ -66,14 +57,15 @@ class ImageFolder(data.Dataset):
 			# A.VerticalFlip(p=0.5), # Possibility to cause problems with the rectum and bladder
 		])
 		# This transform is only used for the MRI
-		deformation = tio.Compose([
-			tio.RandomElasticDeformation(
-				p=self.augmentation_prob,
-				num_control_points=7,  # or just 7
-    			locked_borders=1,),
-		])
+		# deformation = tio.Compose([
+		# 	tio.RandomElasticDeformation(
+		# 		p=self.augmentation_prob,
+		# 		num_control_points=7,  # or just 7
+    	# 		locked_borders=1,),
+		# ])
 		random_bias = tio.Compose([
-			# tio.RandomElasticDeformation(
+			## Make the training set hard and there is a huge different between the training loss and validation loss
+			# tio.RandomElasticDeformation(   
 			# 	num_control_points=7,  # or just 7
     		# 	locked_borders=2,),
 			
@@ -110,8 +102,9 @@ class ImageFolder(data.Dataset):
 			augmented = trans(image=image, mask=GT)
 			# I used expand dims because the tranformation in torch io applied in 3D volumes
 			image = random_bias(np.expand_dims(augmented["image"], axis=0))
-			image = deformation(image)
-			GT = deformation(np.expand_dims(augmented["mask"], axis=0))
+			# image = deformation(image)
+			# GT = deformation(np.expand_dims(augmented["mask"], axis=0))
+			GT = np.expand_dims(augmented["mask"], axis=0)
 
 			image = to_tensor(image.squeeze(axis=-1)).permute(1,2,0)
 			GT = to_tensor(GT.squeeze(axis=-1)).permute(1,2,0)
