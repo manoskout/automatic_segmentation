@@ -137,7 +137,7 @@ class MultiSolver(object):
 			)
 		)
 
-	def _update_metricRecords(self,mode,metric, classes=None):	
+	def _update_metricRecords(self,csv_writer,mode,metric, classes=None):	
 		avg_metrics = [
 					self.epoch+1,self.lr, metric.avg_loss, 
 					metric.all_precision, metric.all_recall, metric.all_sensitivity, 
@@ -158,7 +158,7 @@ class MultiSolver(object):
 			self.writer.add_scalars("jaccard", {mode:metric.all_iou}, self.epoch)
 			self.writer.add_scalars("hausdorff", {mode:metric.all_hd}, self.epoch)
 			self.writer.add_scalars("hausforff_95", {mode:metric.all_hd95}, self.epoch)
-			self.wr_valid.writerow( 
+			csv_writer.writerow( 
 				avg_metrics
 				)
 	
@@ -208,7 +208,7 @@ class MultiSolver(object):
 		print(f'[Validation] --> Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.all_dice}, \
 			Recall: {metrics.all_recall}, Precision: {metrics.all_precision}, Specificity: {metrics.all_specificity}, \
 			Sensitivity: {metrics.all_sensitivity}, IoU: {metrics.all_iou} , HD: {metrics.all_hd}, HD95: {metrics.all_hd95}')
-		self._update_metricRecords("Validation",metrics, self.classes)
+		self._update_metricRecords(self.wr_valid,"Validation",metrics, self.classes)
 		
 	
 	def train_epoch(self):
@@ -248,7 +248,7 @@ class MultiSolver(object):
 			Sensitivity: {metrics.all_sensitivity}, IoU: {metrics.all_iou} , \
 			HD: {metrics.all_hd}, HD95: {metrics.all_hd95}')
 
-		self._update_metricRecords("Training",metrics, self.classes)
+		self._update_metricRecords(self.wr_train,"Training",metrics, self.classes)
 
 	def train_model(self):
 		"""Train encoder, generator and discriminator."""
@@ -300,7 +300,6 @@ class MultiSolver(object):
 			print('%s is Successfully Loaded from %s'%(self.model_type,unet_path))
 		else:
 			print("The training process starts...")
-			lr = self.lr
 			self.n_train = len(self.train_loader)
 			self.global_step = 0
 			self.writer = SummaryWriter()
@@ -309,10 +308,11 @@ class MultiSolver(object):
 				self.train_epoch()
 				# Decay learning rate
 				if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
-					lr -= (self.lr / float(self.num_epochs_decay))
+					self.lr -= (self.lr / float(self.num_epochs_decay))
+
 					for param_group in self.optimizer.param_groups:
-						param_group['lr'] = lr
-					print ('Decay learning rate to lr: {}.'.format(lr))
+						param_group['lr'] = self.lr
+					print ('Decay learning rate to lr: {}.'.format(self.lr))
 				
 				
 				#===================================== Validation ====================================#

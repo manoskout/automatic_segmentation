@@ -23,7 +23,7 @@ def load_data(path):
 
     return (train_x, train_y), (test_x, test_y)
 
-def augment_data(images, masks, existed_imgs, existed_masks, save_path, size= (512,512), output_type ="numpy", augment=True):
+def augment_data(images, masks, existed_imgs, existed_masks, save_path, output_type ="numpy", augment=True):
     create_dir(os.path.join(save_path,"image"))
     create_dir(os.path.join(save_path,"mask"))
 
