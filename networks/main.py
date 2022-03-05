@@ -26,16 +26,10 @@ def main(config):
         print('ERROR! Choose the right model')
         return
 
-    # Create directories if not exist
-    if not os.path.exists(config.model_path):
-        os.makedirs(config.model_path)
-    if not os.path.exists(config.result_path):
-        os.makedirs(config.result_path)
-    config.result_path = os.path.join(config.result_path,config.model_type)
     if not os.path.exists(config.result_path):
         os.makedirs(config.result_path)
     
-    
+
     lr = config.lr 
     print("Learning rate = ", lr)
     epoch = config.num_epochs
@@ -121,7 +115,7 @@ if __name__ == '__main__':
     day, month = datetime.date(datetime.now()).day, datetime.date(datetime.now()).month
     config.log_dir = f"./runs/{day}_{month}_{config.type}_{config.model_name}_{config.num_epochs}"
     
-    config.result_path=f'./result/{day}_{month}_{config.type}_{config.model_name}_{config.num_epochs}' if config.result_path else config.result_path
+    config.result_path=f'./result/{config.model_name}/{day}_{month}_{config.type}_{config.num_epochs}' if config.result_path else config.result_path
     try:
         main(config)
     except KeyboardInterrupt:
