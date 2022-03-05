@@ -287,7 +287,7 @@ class MultiSolver(object):
 		
 		metric_list = ["epoch","lr", "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hd","hd95"]
 		for _, id in self.classes.items():
-			for i in ["dice","iou","hd"]:
+			for i in ["iou","dice","hd"]:
 				metric_list.append(f"{id}_{i}")
 		self.wr_valid.writerow(metric_list)
 		self.wr_train.writerow(metric_list)
