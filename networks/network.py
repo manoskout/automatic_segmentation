@@ -27,19 +27,23 @@ def init_weights(net, init_type='normal', gain=0.02):
     net.apply(init_func)
 
 class conv_block(nn.Module):
-    def __init__(self,ch_in,ch_out):
+    def __init__(self,ch_in : int,ch_out : int, dropout : float= 0.) -> None:
         super(conv_block,self).__init__()
-        self.conv = nn.Sequential(
+        layers = [
             nn.Conv2d(ch_in, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
             nn.BatchNorm2d(ch_out),
             nn.ReLU(inplace=True),
             nn.Conv2d(ch_out, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
             nn.BatchNorm2d(ch_out),
             nn.ReLU(inplace=True)
-        )
+        ]
+        if dropout != 0.:
+            layers.append(nn.Dropout(dropout=dropout))
+        self.conv = nn.Sequential(*layers)
 
 
-    def forward(self,x):
+
+    def forward(self,x : torch.Tensor)-> torch.Tensor:
         x = self.conv(x)
         return x
 
@@ -53,12 +57,12 @@ class up_conv(nn.Module):
 			nn.ReLU(inplace=True)
         )
 
-    def forward(self,x):
+    def forward(self,x : torch.Tensor) -> torch.Tensor:
         x = self.up(x)
         return x
 
 class Recurrent_block(nn.Module):
-    def __init__(self,ch_out,t=2):
+    def __init__(self,ch_out : int,t: int = 2):
         super(Recurrent_block,self).__init__()
         self.t = t
         self.ch_out = ch_out
@@ -68,7 +72,7 @@ class Recurrent_block(nn.Module):
 			nn.ReLU(inplace=True)
         )
 
-    def forward(self,x):
+    def forward(self,x : torch.Tensor) -> torch.Tensor:
         for i in range(self.t):
 
             if i==0:
@@ -78,7 +82,7 @@ class Recurrent_block(nn.Module):
         return x1
         
 class RRCNN_block(nn.Module):
-    def __init__(self,ch_in,ch_out,t=2):
+    def __init__(self, ch_in : int, ch_out : int, t: int = 2):
         super(RRCNN_block,self).__init__()
         self.RCNN = nn.Sequential(
             Recurrent_block(ch_out,t=t),
@@ -86,14 +90,14 @@ class RRCNN_block(nn.Module):
         )
         self.Conv_1x1 = nn.Conv2d(ch_in,ch_out,kernel_size=1,stride=1,padding=0)
 
-    def forward(self,x):
+    def forward(self,x : torch.Tensor) -> torch.Tensor:
         x = self.Conv_1x1(x)
         x1 = self.RCNN(x)
         return x+x1
 
 
 class single_conv(nn.Module):
-    def __init__(self,ch_in,ch_out):
+    def __init__(self,ch_in: int, ch_out: int) -> None:
         super(single_conv,self).__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(ch_in, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
@@ -101,12 +105,12 @@ class single_conv(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-    def forward(self,x):
+    def forward(self,x : torch.Tensor) -> torch.Tensor:
         x = self.conv(x)
         return x
 
 class Attention_block(nn.Module):
-    def __init__(self,F_g,F_l,F_int):
+    def __init__(self, F_g: int, F_l: int, F_int: int) -> None:
         super(Attention_block,self).__init__()
         self.W_g = nn.Sequential(
             nn.Conv2d(F_g, F_int, kernel_size=1,stride=1,padding=0,bias=True),
@@ -126,7 +130,7 @@ class Attention_block(nn.Module):
         
         self.relu = nn.ReLU(inplace=True)
         
-    def forward(self,g,x):
+    def forward(self, g: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         g1 = self.W_g(g)
         x1 = self.W_x(x)
         psi = self.relu(g1+x1)
@@ -136,33 +140,33 @@ class Attention_block(nn.Module):
 
 
 class U_Net(nn.Module):
-    def __init__(self,img_ch=3,output_ch=1):
+    def __init__(self,img_ch: int = 3,output_ch: int = 1, dropout: float = 0.) -> None:
         super(U_Net,self).__init__()
         self.output_ch = output_ch
         self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
 
-        self.Conv1 = conv_block(ch_in=img_ch,ch_out=64)
-        self.Conv2 = conv_block(ch_in=64,ch_out=128)
-        self.Conv3 = conv_block(ch_in=128,ch_out=256)
-        self.Conv4 = conv_block(ch_in=256,ch_out=512)
-        self.Conv5 = conv_block(ch_in=512,ch_out=1024)
+        self.Conv1 = conv_block(ch_in= img_ch, ch_out= 64, dropout= dropout)
+        self.Conv2 = conv_block(ch_in= 64, ch_out= 128, dropout= dropout)
+        self.Conv3 = conv_block(ch_in= 128, ch_out= 256, dropout= dropout)
+        self.Conv4 = conv_block(ch_in= 256, ch_out= 512, dropout= dropout)
+        self.Conv5 = conv_block(ch_in= 512, ch_out= 1024, dropout= dropout)
 
-        self.Up5 = up_conv(ch_in=1024,ch_out=512)
-        self.Up_conv5 = conv_block(ch_in=1024, ch_out=512)
+        self.Up5 = up_conv(ch_in= 1024, ch_out= 512)
+        self.Up_conv5 = conv_block(ch_in=1024, ch_out=512,dropout= dropout)
 
         self.Up4 = up_conv(ch_in=512,ch_out=256)
-        self.Up_conv4 = conv_block(ch_in=512, ch_out=256)
+        self.Up_conv4 = conv_block(ch_in=512, ch_out=256,dropout= dropout)
         
         self.Up3 = up_conv(ch_in=256,ch_out=128)
-        self.Up_conv3 = conv_block(ch_in=256, ch_out=128)
+        self.Up_conv3 = conv_block(ch_in=256, ch_out=128,dropout= dropout)
         
         self.Up2 = up_conv(ch_in=128,ch_out=64)
-        self.Up_conv2 = conv_block(ch_in=128, ch_out=64)
+        self.Up_conv2 = conv_block(ch_in=128, ch_out=64,dropout= dropout)
 
         self.Conv_1x1 = nn.Conv2d(64,output_ch,kernel_size=1,stride=1,padding=0)
 
 
-    def forward(self,x):
+    def forward(self,x: torch.Tensor) -> torch.Tensor:
         # encoding path
         x1 = self.Conv1(x)
 
@@ -201,7 +205,7 @@ class U_Net(nn.Module):
 
 
 class R2U_Net(nn.Module):
-    def __init__(self,img_ch=3,output_ch=1,t=2):
+    def __init__(self,img_ch: int= 3, output_ch: int= 1,t: int= 2) -> None:
         super(R2U_Net,self).__init__()
         
         self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
@@ -233,7 +237,7 @@ class R2U_Net(nn.Module):
         self.Conv_1x1 = nn.Conv2d(64,output_ch,kernel_size=1,stride=1,padding=0)
 
 
-    def forward(self,x):
+    def forward(self,x: torch.Tensor) -> torch.Tensor:
         # encoding path
         x1 = self.RRCNN1(x)
 
@@ -273,7 +277,7 @@ class R2U_Net(nn.Module):
 
 
 class AttU_Net(nn.Module):
-    def __init__(self,img_ch=3,output_ch=1):
+    def __init__(self,img_ch: int=3, output_ch: int= 1)-> None:
         super(AttU_Net,self).__init__()
         
         self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
@@ -303,7 +307,7 @@ class AttU_Net(nn.Module):
         self.Conv_1x1 = nn.Conv2d(64,output_ch,kernel_size=1,stride=1,padding=0)
 
 
-    def forward(self,x):
+    def forward(self,x: torch.Tensor) -> torch.Tensor:
         # encoding path
         x1 = self.Conv1(x)
 
@@ -346,7 +350,7 @@ class AttU_Net(nn.Module):
 
 
 class R2AttU_Net(nn.Module):
-    def __init__(self,img_ch=3,output_ch=1,t=2):
+    def __init__(self,img_ch: int= 3, output_ch: int= 1, t: int= 2)-> None:
         super(R2AttU_Net,self).__init__()
         
         self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
@@ -382,7 +386,7 @@ class R2AttU_Net(nn.Module):
         self.Conv_1x1 = nn.Conv2d(64,output_ch,kernel_size=1,stride=1,padding=0)
 
 
-    def forward(self,x):
+    def forward(self,x: torch.Tensor) -> torch.Tensor:
         # encoding path
         x1 = self.RRCNN1(x)
 
