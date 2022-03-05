@@ -5,6 +5,7 @@ from Binary.solver import Solver
 from loaders.data_loader import get_loader
 from torch.backends import cudnn
 import random
+from datetime import datetime
 def class_mapping(classes):
 	""" Maps the classes according to the pixel are shown into the mask
 	"""
@@ -109,7 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train')
     parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\validation')
     parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\test')
-    parser.add_argument('--result_path', type=str, default='./result/')
+    parser.add_argument('--result_path', type=str, default='')
     # To pass an list argument, you should type
     # i.e. python main.py --classes RECTUM VESSIE TETE_FEMORALE_D TETE_FEMORALE_G
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND", "RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
@@ -117,6 +118,10 @@ if __name__ == '__main__':
     parser.add_argument('--cuda_idx', type=int, default=1)
 
     config = parser.parse_args()
+    day, month = datetime.date(datetime.now()).day, datetime.date(datetime.now()).month
+    config.log_dir = f"./runs/{day}_{month}_{config.type}_{config.model_name}_{config.num_epochs}"
+    
+    config.result_path=f'./result/{day}_{month}_{config.type}_{config.model_name}_{config.num_epochs}' if config.result_path else config.result_path
     try:
         main(config)
     except KeyboardInterrupt:

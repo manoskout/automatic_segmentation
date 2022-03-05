@@ -7,7 +7,7 @@ import torchvision
 from torch import optim
 from utils_metrics import AverageMeter
 from losses import DiceLoss
-from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
+# from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
 from tqdm import tqdm
@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 class MultiSolver(object):
-	def __init__(self, config, train_loader, valid_loader, test_loader, classes):
+	def __init__(self, config, train_loader, valid_loader, test_loader, classes, save_images: bool= False):
 
 		# Data loader
 
@@ -23,6 +23,7 @@ class MultiSolver(object):
 		self.valid_loader = valid_loader
 		self.test_loader = test_loader
 		self.classes = classes
+		self.save_images = save_images
 		del self.classes[0] # Delete the background label
 		# Models
 		self.unet = None
@@ -52,7 +53,12 @@ class MultiSolver(object):
 		self.result_path = config.result_path
 		self.mode = config.mode
 
+		# Set tensorboard writer
+		self.writer = SummaryWriter(log_dir=config.log_dir)
+
+
 		self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+		print("Device that is in use : {}".format(self.device))
 		self.model_type = config.model_type
 		self.t = config.t
 		self.build_model()
@@ -95,23 +101,17 @@ class MultiSolver(object):
 		return output
 
 	def save_validation_results(self, image, pred_mask, true_mask,epoch):
-		# print(f"[BEFORE]   unique pred: {torch.unique(pred_mask)}, unique true: {torch.unique(true_mask)}")
-		# print(f"image : {image.shape} , pred_masks : {pred_mask.shape}, true_mask: {true_mask.shape}")
 
 		if len(self.classes)>1:
 			pred_mask = torch.argmax(pred_mask,dim=1)
 			pred_mask = self.classes_to_mask(pred_mask)
-			# true_mask =torch.argmax(true_mask,dim=1)
 			true_mask[0] = self.classes_to_mask(true_mask[0])
 			true_mask = true_mask.to(torch.float32)
-		# print(f"unique pred: {torch.unique(pred_mask)}, unique true: {torch.unique(true_mask)}")
 		image = image.data.cpu()
 		pred_mask = pred_mask.data.cpu()
 		true_mask = true_mask.data.cpu()
 		pred_mask.unsqueeze(1)
-		# torch.set_printoptions(profile="full")
-		# print(torch.unique(pred_mask))
-		# print(f"image : {image.shape} , pred_masks : {pred_mask.shape}, true_mask: {true_mask.shape}")
+
 		torchvision.utils.save_image(
 			image,
 			os.path.join(
@@ -199,7 +199,8 @@ class MultiSolver(object):
 
 			metrics.update(loss.item(), true_mask, pred_mask, image.size(0)/self.batch_size, classes=self.classes)
 		self.unet.train()
-		self.save_validation_results(image, pred_mask, true_mask,self.epoch)
+		if self.save_images:
+			self.save_validation_results(image, pred_mask, true_mask,self.epoch)
 		if self.min_valid_loss > metrics.avg_loss:
 			print(f'[Validation] Loss Decreased({self.min_valid_loss:.6f}--->{metrics.avg_loss:.6f}) \t Saving The Model')
 			self.min_valid_loss = metrics.avg_loss
@@ -302,7 +303,6 @@ class MultiSolver(object):
 			print("The training process starts...")
 			self.n_train = len(self.train_loader)
 			self.global_step = 0
-			self.writer = SummaryWriter()
 			for epoch in range(self.num_epochs):
 				self.epoch = epoch
 				self.train_epoch()
