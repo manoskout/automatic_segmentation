@@ -298,7 +298,7 @@ class DiceBCELoss(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(DiceBCELoss, self).__init__()
 
-    def forward(self, inputs: torch.Tensor, targets: torch.Tensor, smooth: int =1):
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor, smooth: int =1) -> torch.Tensor:
         
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = torch.sigmoid(inputs)       
@@ -315,7 +315,7 @@ class DiceBCELoss(nn.Module):
         return Dice_BCE
 
 class DiceLoss(nn.Module):
-    def __init__(self, weight=None, size_average=True):
+    def __init__(self, weight=None, size_average: bool= True):
         super(DiceLoss, self).__init__()
 
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor, smooth: int=1):
