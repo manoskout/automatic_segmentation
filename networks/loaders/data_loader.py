@@ -16,7 +16,7 @@ from loaders.preprocessing import crop_and_pad, limiting_filter
 
 
 class ImageFolder(data.Dataset):
-	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.4, is_multiorgan = True):
+	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.5, is_multiorgan = True):
 		"""Initializes image paths and preprocessing module."""
 		self.root = root
 		self.is_multiorgan = is_multiorgan
