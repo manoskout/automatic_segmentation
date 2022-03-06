@@ -22,10 +22,13 @@ class MultiSolver(object):
 		self.train_loader = train_loader
 		self.valid_loader = valid_loader
 		self.test_loader = test_loader
-		self.classes = classes
+		if config.type == "multiclass":
+			self.classes = classes
+			del self.classes[0] # Delete the background label
+		else:
+			classes = []
 		self.save_images = save_images
-		del self.classes[0] # Delete the background label
-		# Models
+		# Model
 		self.unet = None
 		self.optimizer = None
 		self.img_ch = config.img_ch
@@ -145,22 +148,21 @@ class MultiSolver(object):
 					metric.all_hd,metric.all_hd95
 				]
 		if classes:
-			print(classes)
 			for index in range(len(classes.items())):
 				avg_metrics.append(metric.avg_iou[index])
 				avg_metrics.append(metric.avg_dice[index])
 				avg_metrics.append(metric.avg_hd[index])
-			self.writer.add_scalars("loss", {mode:metric.avg_loss}, self.epoch)
-			self.writer.add_scalars("recall", {mode:metric.all_recall}, self.epoch)
-			self.writer.add_scalars("sensitivity", {mode:metric.all_sensitivity}, self.epoch)
-			self.writer.add_scalars("specificity", {mode:metric.all_specificity}, self.epoch)
-			self.writer.add_scalars("dice", {mode:metric.all_dice}, self.epoch)
-			self.writer.add_scalars("jaccard", {mode:metric.all_iou}, self.epoch)
-			self.writer.add_scalars("hausdorff", {mode:metric.all_hd}, self.epoch)
-			self.writer.add_scalars("hausforff_95", {mode:metric.all_hd95}, self.epoch)
-			csv_writer.writerow( 
-				avg_metrics
-				)
+		self.writer.add_scalars("loss", {mode:metric.avg_loss}, self.epoch)
+		self.writer.add_scalars("recall", {mode:metric.all_recall}, self.epoch)
+		self.writer.add_scalars("sensitivity", {mode:metric.all_sensitivity}, self.epoch)
+		self.writer.add_scalars("specificity", {mode:metric.all_specificity}, self.epoch)
+		self.writer.add_scalars("dice", {mode:metric.all_dice}, self.epoch)
+		self.writer.add_scalars("jaccard", {mode:metric.all_iou}, self.epoch)
+		self.writer.add_scalars("hausdorff", {mode:metric.all_hd}, self.epoch)
+		self.writer.add_scalars("hausforff_95", {mode:metric.all_hd95}, self.epoch)
+		csv_writer.writerow( 
+			avg_metrics
+			)
 	
 
 
@@ -287,9 +289,10 @@ class MultiSolver(object):
 		self.wr_valid = csv.writer(validation_log)
 		
 		metric_list = ["epoch","lr", "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hd","hd95"]
-		for _, id in self.classes.items():
-			for i in ["iou","dice","hd"]:
-				metric_list.append(f"{id}_{i}")
+		if self.classes:
+			for _, id in self.classes.items():
+				for i in ["iou","dice","hd"]:
+					metric_list.append(f"{id}_{i}")
 		self.wr_valid.writerow(metric_list)
 		self.wr_train.writerow(metric_list)
 		
@@ -300,7 +303,6 @@ class MultiSolver(object):
 			self.unet.load_state_dict(torch.load(unet_path))
 			print('%s is Successfully Loaded from %s'%(self.model_type,unet_path))
 		else:
-			print("The training process starts...")
 			self.n_train = len(self.train_loader)
 			self.global_step = 0
 			for epoch in range(self.num_epochs):

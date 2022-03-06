@@ -16,7 +16,6 @@ def class_mapping(classes):
 			mapping_dict[0]= index
 		else:
 			mapping_dict[int(255/index)]= index
-		# print(f"{index} : {i} --> {mapping_dict}")
 	return mapping_dict
 
 
@@ -63,6 +62,9 @@ def main(config):
 
  
 
+    print("Train images: {}".format(len(train_loader.__len__())))
+    print("Valid images: {}".format(len(valid_loader.__len__())))
+    print("test images: {}".format(len(test_loader.__len__())))
     
     # Train and sample the images
     if config.type == "binary":
