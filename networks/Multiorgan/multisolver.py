@@ -33,12 +33,13 @@ class MultiSolver(object):
 		self.optimizer = None
 		self.img_ch = config.img_ch
 		self.output_ch = config.output_ch
+		self.dropout = config.dropout
 		# Using this loss we dont have to perform one_hot is already implemented inside the function
 		# self.criterion = torch.nn.CrossEntropyLoss()
 		self.criterion = DiceLoss(mode=config.type)  
 		  
 		self.min_valid_loss = np.inf	
-		self.model_name = config.model_name				
+		self.model_name = config.model_name			
 
 		# Hyper-parameters
 		self.lr = config.lr
@@ -68,19 +69,22 @@ class MultiSolver(object):
 
 	def build_model(self):
 		"""Build generator and discriminator."""
+		# TODO -> Dropout layers are not implemented into the R2U_net and R2Att_unet
 		if self.model_type =='U_Net':
-			self.unet = U_Net(img_ch=self.img_ch,output_ch=self.output_ch)
+			self.unet = U_Net(img_ch=self.img_ch,output_ch=self.output_ch, dropout=self.dropout)
 		elif self.model_type =='R2U_Net':
 			self.unet = R2U_Net(img_ch=self.img_ch,output_ch=self.output_ch,t=self.t)
 		elif self.model_type =='AttU_Net':
-			self.unet = AttU_Net(img_ch=self.img_ch,output_ch=self.output_ch)
+			self.unet = AttU_Net(img_ch=self.img_ch,output_ch=self.output_ch, dropout=self.dropout)
 		elif self.model_type == 'R2AttU_Net':
 			self.unet = R2AttU_Net(img_ch=self.img_ch,output_ch=self.output_ch,t=self.t)
 			
 		# self.grad_scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
 
 		self.optimizer = optim.Adam(list(self.unet.parameters()),
-									 self.lr, [self.beta1, self.beta2])
+									 self.lr, [self.beta1, self.beta2],weight_decay=1e-5)
+		self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+			self.optimizer,"min", patience=self.num_epochs_decay)
 		self.unet.to(self.device)
 
 	def classes_to_mask(self,mask):
@@ -152,6 +156,8 @@ class MultiSolver(object):
 				avg_metrics.append(metric.avg_iou[index])
 				avg_metrics.append(metric.avg_dice[index])
 				avg_metrics.append(metric.avg_hd[index])
+		if mode == "Training":
+			self.writer.add_scalars("learning_rate", {mode:self.optimizer.param_groups[0]['lr']}, self.epoch)
 		self.writer.add_scalars("loss", {mode:metric.avg_loss}, self.epoch)
 		self.writer.add_scalars("recall", {mode:metric.all_recall}, self.epoch)
 		self.writer.add_scalars("sensitivity", {mode:metric.all_sensitivity}, self.epoch)
@@ -166,7 +172,7 @@ class MultiSolver(object):
 	
 
 
-	def evaluation(self):
+	def evaluation(self) -> float:
 		"""
 		"""
 		self.unet.train(False)
@@ -212,7 +218,7 @@ class MultiSolver(object):
 			Recall: {metrics.all_recall}, Precision: {metrics.all_precision}, Specificity: {metrics.all_specificity}, \
 			Sensitivity: {metrics.all_sensitivity}, IoU: {metrics.all_iou} , HD: {metrics.all_hd}, HD95: {metrics.all_hd95}')
 		self._update_metricRecords(self.wr_valid,"Validation",metrics, self.classes)
-		
+		return loss.item()
 	
 	def train_epoch(self):
 		self.unet.train(True)
@@ -246,10 +252,10 @@ class MultiSolver(object):
 
 
 		# Print the log info
-		print(f'[Training] [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.all_dice}, \
+		print(f"[Training] [{self.epoch+1}/{self.num_epochs}, Lr: {self.optimizer.param_groups[0]['lr']}], Loss: {metrics.avg_loss}, DC: {metrics.all_dice}, \
 			Recall: {metrics.all_recall}, Precision: {metrics.all_precision}, Specificity: {metrics.all_specificity}, \
 			Sensitivity: {metrics.all_sensitivity}, IoU: {metrics.all_iou} , \
-			HD: {metrics.all_hd}, HD95: {metrics.all_hd95}')
+			HD: {metrics.all_hd}, HD95: {metrics.all_hd95}")
 
 		self._update_metricRecords(self.wr_train,"Training",metrics, self.classes)
 
@@ -287,7 +293,7 @@ class MultiSolver(object):
 
 		self.wr_train = csv.writer(training_log)
 		self.wr_valid = csv.writer(validation_log)
-		
+		val_loss = 0
 		metric_list = ["epoch","lr", "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hd","hd95"]
 		if self.classes:
 			for _, id in self.classes.items():
@@ -309,19 +315,23 @@ class MultiSolver(object):
 				self.epoch = epoch
 				self.train_epoch()
 				# Decay learning rate
-				if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
-					self.lr -= (self.lr / float(self.num_epochs_decay))
+				# print(f"epoch decay:{self.num_epochs - self.num_epochs_decay}")
+				# if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
+				# 	self.lr -= (self.lr / float(self.num_epochs_decay))
 
-					for param_group in self.optimizer.param_groups:
-						param_group['lr'] = self.lr
-					print ('Decay learning rate to lr: {}.'.format(self.lr))
+				# 	for param_group in self.optimizer.param_groups:
+				# 		param_group['lr'] = self.lr
+				# 	print ('Decay learning rate to lr: {}.'.format(self.lr))
 				
 				
 				#===================================== Validation ====================================#
 				division_step = (self.n_train // (10 * self.batch_size))
 				if division_step > 0:
 					# if self.global_step % division_step == 0:	
-					self.evaluation()
+					val_loss = self.evaluation()
+				self.scheduler.step(val_loss)
+				# TODO : Change this command below
+				self.lr = self.optimizer.param_groups[0]['lr']
 			training_log.close()
 			validation_log.close()
             

@@ -62,9 +62,6 @@ def main(config):
 
  
 
-    print("Train images: {}".format(len(train_loader.__len__())))
-    print("Valid images: {}".format(len(valid_loader.__len__())))
-    print("test images: {}".format(len(test_loader.__len__())))
     
     # Train and sample the images
     if config.type == "binary":
@@ -93,7 +90,7 @@ if __name__ == '__main__':
     parser.add_argument('--img_ch', type=int, default=1)
     parser.add_argument('--output_ch', type=int, default=5)
     parser.add_argument('--num_epochs', type=int, default=10)
-    parser.add_argument('--num_epochs_decay', type=int, default=70)
+    parser.add_argument('--num_epochs_decay', type=int, default=3)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--lr', type=float, default=0.001)
@@ -108,6 +105,7 @@ if __name__ == '__main__':
     parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\validation')
     parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\test')
     parser.add_argument('--result_path', type=str, default='')
+    parser.add_argument('--dropout', type=float, default=0., help="Set a dropout value in order to set a dropout layers into the model")
     # To pass an list argument, you should type
     # i.e. python main.py --classes RECTUM VESSIE TETE_FEMORALE_D TETE_FEMORALE_G
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND", "RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
