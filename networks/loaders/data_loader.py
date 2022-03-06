@@ -4,6 +4,7 @@ warnings.filterwarnings("ignore") # temporal
 import os
 import numpy as np
 import torch
+from numpy import random
 from torch.utils import data
 import albumentations as A
 from torchvision import transforms as T
@@ -45,6 +46,9 @@ class ImageFolder(data.Dataset):
 		
 	def __getitem__(self, index):
 		"""Reads an image from a file and preprocesses it and returns."""
+		seed = np.random.randint(2147483647) # make a seed with numpy generator 
+		random.seed(seed) # apply this seed to img transforms
+		torch.manual_seed(seed)
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
 		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + 'mask.png')
