@@ -35,7 +35,6 @@ class ImageFolder(data.Dataset):
 		)
 		self.image_size = (image_size,image_size)
 		self.mode = mode
-		print("image count in {} path :{}".format(self.mode,len(self.image_paths)))
 
 	def mask_to_class(self,mask):
 		for k in self.classes:
