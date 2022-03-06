@@ -21,11 +21,12 @@ def class_mapping(classes):
 
 
 def main(config):
+    print(config.result_path)
     cudnn.benchmark = True
     if config.model_type not in ['U_Net','R2U_Net','AttU_Net','R2AttU_Net']:
         print('ERROR! Choose the right model')
         return
-
+    
     if not os.path.exists(config.result_path):
         os.makedirs(config.result_path)
     
@@ -113,9 +114,9 @@ if __name__ == '__main__':
 
     config = parser.parse_args()
     day, month = datetime.date(datetime.now()).day, datetime.date(datetime.now()).month
-    config.log_dir = f"./runs/{day}_{month}_{config.type}_{config.model_name}_{config.num_epochs}"
+    config.log_dir = f"./runs/{config.type}/{day}_{month}_{config.model_type}_{config.num_epochs}"
     
-    config.result_path=f'./result/{config.model_name}/{day}_{month}_{config.type}_{config.num_epochs}' if config.result_path else config.result_path
+    config.result_path=f'./result/{config.model_type}/{day}_{month}_{config.type}_{config.num_epochs}'
     try:
         main(config)
     except KeyboardInterrupt:
