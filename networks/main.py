@@ -111,6 +111,8 @@ if __name__ == '__main__':
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND", "RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
 
     parser.add_argument('--cuda_idx', type=int, default=1)
+    parser.add_argument("--smp", action="store_true", help="Use smp_library")
+
 
     config = parser.parse_args()
     day, month = datetime.date(datetime.now()).day, datetime.date(datetime.now()).month
