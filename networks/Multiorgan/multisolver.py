@@ -40,7 +40,8 @@ class MultiSolver(object):
 		self.criterion = DiceLoss(mode=config.type)  
 
 		self.smp_enabled = config.smp
-		  
+		self.encoder_name = config.encoder_name
+		self.encoder_weights=config.encoder_weights		  
 		self.min_valid_loss = np.inf	
 		self.model_name = config.model_name			
 
@@ -75,8 +76,8 @@ class MultiSolver(object):
 		# TODO -> Dropout layers are not implemented into the R2U_net and R2Att_unet
 		if self.smp_enabled:
 			self.unet = smp.DeepLabV3Plus(
-				encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-				encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
+				encoder_name=self.encoder_name,        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+				encoder_weights=self.encoder_weights,     # use `imagenet` pre-trained weights for encoder initialization
 				in_channels=self.img_ch,        # model input channels (1 for gray-scale images, 3 for RGB, etc.)
 				classes=self.output_ch,         # model output channels (number of classes in your dataset)
 			)

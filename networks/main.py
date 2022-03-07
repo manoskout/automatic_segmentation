@@ -22,7 +22,7 @@ def class_mapping(classes):
 def main(config):
     print(config.result_path)
     cudnn.benchmark = True
-    if config.model_type not in ['U_Net','R2U_Net','AttU_Net','R2AttU_Net']:
+    if config.model_type not in ['U_Net','DeepLabV3','DeepLabV3+','R2U_Net','AttU_Net','R2AttU_Net']:
         print('ERROR! Choose the right model')
         return
     
@@ -99,13 +99,16 @@ if __name__ == '__main__':
     # misc
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--model_name', type=str, default='femoral_d_U_Net-150-0.0004-11-0.4000.pkl')
-    parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
+    parser.add_argument('--model_type', type=str, default='U_Net', help='DeepLabV3/DeepLabV3+/U_Net/R2U_Net/AttU_Net/R2AttU_Net')
     parser.add_argument('--model_path', type=str, default='./models')
     parser.add_argument('--train_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train')
     parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\validation')
     parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\test')
     parser.add_argument('--result_path', type=str, default='')
-    parser.add_argument('--dropout', type=float, default=0., help="Set a dropout value in order to set a dropout layers into the model")
+    parser.add_argument('--dropout', type=float, default=0., help="Set a dropout value in order to set a dropout layers into the model") 
+    parser.add_argument('--encoder_name', type=str, default='resnet34', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
+    parser.add_argument('--encoder_weights', type=str, default='imagenet', help="Pretrained weight, default: imagenet")
+
     # To pass an list argument, you should type
     # i.e. python main.py --classes RECTUM VESSIE TETE_FEMORALE_D TETE_FEMORALE_G
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND", "RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
@@ -118,7 +121,13 @@ if __name__ == '__main__':
     day, month = datetime.date(datetime.now()).day, datetime.date(datetime.now()).month
     config.log_dir = f"./runs/{config.type}/{day}_{month}_{config.model_type}_{config.num_epochs}"
     
-    config.result_path=f'./result/{config.model_type}/{day}_{month}_{config.type}_{config.num_epochs}'
+    
+    if config.smp:
+        config.log_dir = f"./runs/{config.type}/{config.encoder_name}_{config.encoder_weights}_{day}_{month}_{config.model_type}_{config.num_epochs}"
+        config.result_path=f'./result/{config.model_type}/{config.encoder_name}_{config.encoder_weights}_{day}_{month}_{config.type}_{config.num_epochs}'
+    else:
+        config.log_dir = f"./runs/{config.type}/{day}_{month}_{config.model_type}_{config.num_epochs}"
+        config.result_path=f'./result/{config.model_type}/{day}_{month}_{config.type}_{config.num_epochs}'
     try:
         main(config)
     except KeyboardInterrupt:
