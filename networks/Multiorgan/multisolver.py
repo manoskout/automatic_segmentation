@@ -5,7 +5,8 @@ import torch
 torch.cuda.empty_cache()
 import torchvision
 from torch import optim
-from utils_metrics import AverageMeter
+from utils_metrics import AverageMeter, EarlyStopping
+import segmentation_models_pytorch as smp 
 from losses import DiceLoss
 # from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
@@ -37,6 +38,8 @@ class MultiSolver(object):
 		# Using this loss we dont have to perform one_hot is already implemented inside the function
 		# self.criterion = torch.nn.CrossEntropyLoss()
 		self.criterion = DiceLoss(mode=config.type)  
+
+		self.smp_enabled = config.smp
 		  
 		self.min_valid_loss = np.inf	
 		self.model_name = config.model_name			
@@ -70,7 +73,14 @@ class MultiSolver(object):
 	def build_model(self):
 		"""Build generator and discriminator."""
 		# TODO -> Dropout layers are not implemented into the R2U_net and R2Att_unet
-		if self.model_type =='U_Net':
+		if self.smp_enabled:
+			self.unet = smp.DeepLabV3Plus(
+				encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+				encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
+				in_channels=self.img_ch,        # model input channels (1 for gray-scale images, 3 for RGB, etc.)
+				classes=self.output_ch,         # model output channels (number of classes in your dataset)
+			)
+		elif self.model_type =='U_Net':
 			self.unet = U_Net(img_ch=self.img_ch,output_ch=self.output_ch, dropout=self.dropout)
 		elif self.model_type =='R2U_Net':
 			self.unet = R2U_Net(img_ch=self.img_ch,output_ch=self.output_ch,t=self.t)
@@ -223,7 +233,6 @@ class MultiSolver(object):
 	def train_epoch(self):
 		self.unet.train(True)
 		metrics = AverageMeter()
-
 		epoch_loss_values = list()
 		with tqdm(total=self.n_train, desc=f'Epoch {self.epoch + 1}/{self.num_epochs}', unit='img') as pbar:
 			for i, (image, true_mask) in enumerate(self.train_loader):
@@ -302,6 +311,7 @@ class MultiSolver(object):
 		self.wr_valid.writerow(metric_list)
 		self.wr_train.writerow(metric_list)
 		
+		early_stopping = EarlyStopping(patience=5, verbose=True)
 
 		# U-Net Train
 		if os.path.isfile(unet_path):
@@ -329,9 +339,18 @@ class MultiSolver(object):
 				if division_step > 0:
 					# if self.global_step % division_step == 0:	
 					val_loss = self.evaluation()
-				self.scheduler.step(val_loss)
+				
 				# TODO : Change this command below
+				self.scheduler.step(val_loss)
+
 				self.lr = self.optimizer.param_groups[0]['lr']
+				early_stopping(val_loss, self.unet)
+        
+				if early_stopping.early_stop:
+					print("Early stopping")
+					training_log.close()
+					validation_log.close()
+					break
 			training_log.close()
 			validation_log.close()
             
