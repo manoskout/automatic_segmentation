@@ -217,10 +217,11 @@ class MaskBuilder:
                           # print(f"Label : {label}, OAR: {oar}   OARSSSS : {self.OARS}")
                           mask_coords = self.update_pixel_coords(slice, contour)
                           mask = poly_to_mask(mask_coords, width=width,height=height,label = oar["label"])
-                          mask_dict[slice.SOPInstanceUID].append(mask)                        
-                      else:
-                          mask = np.zeros((height,width))
-                          mask_dict[slice.SOPInstanceUID].append(mask) if not self.contours_only else None
+                          mask_dict[slice.SOPInstanceUID].append(mask) 
+                      # HUGE MEMORY CONSUMPTION BECAUSE IT CREATES USELESS MASKS   
+                      # else:
+                      #     mask = np.zeros((height,width))
+                      #     mask_dict[slice.SOPInstanceUID].append(mask) if not self.contours_only else None
                   else:
                     print("Error : 11110 ... Really bad")
           self.mask_data[str(index)]["mask"] = mask_dict[slice.SOPInstanceUID]
@@ -280,10 +281,7 @@ class MaskBuilder:
             )
           print("All files saved succesfully.")
         except ValueError:
-          print(
-            "Axes do not match array. Probably patient {patient} does not have all the requested organs segmented"
-            .format(patient=patient)
-          )
+          pass
 
     
     
