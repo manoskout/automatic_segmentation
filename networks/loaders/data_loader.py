@@ -13,12 +13,14 @@ import pydicom as dicom
 import cv2 as cv
 import torchio as tio
 from loaders.preprocessing import crop_and_pad, limiting_filter
+# from preprocessing import crop_and_pad, limiting_filter
 
 
 
 class ImageFolder(data.Dataset):
-	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.5, is_multiorgan = True):
+	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.5, is_multiorgan = True, slave =False):
 		"""Initializes image paths and preprocessing module."""
+		self.slave = slave
 		self.root = root
 		self.is_multiorgan = is_multiorgan
 		self.classes = classes
@@ -47,7 +49,6 @@ class ImageFolder(data.Dataset):
 	def __getitem__(self, index):
 		"""Reads an image from a file and preprocesses it and returns."""
 		seed = np.random.randint(2147483647) # make a seed with numpy generator 
-		random.seed(seed) # apply this seed to img transforms
 		torch.manual_seed(seed)
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
@@ -57,23 +58,28 @@ class ImageFolder(data.Dataset):
 		])
 		trans = A.Compose([
 			A.Rotate(limit=(-15,15),p=self.augmentation_prob),
-			# A.VerticalFlip(p=0.5), # Possibility to cause problems with the rectum and bladder
+			A.Affine(p=self.augmentation_prob, scale=(0.9, 1.2)),
+			A.VerticalFlip(p=self.augmentation_prob), # Possibility to cause problems with the rectum and bladder
 		])
 		# This transform is only used for the MRI
-		# deformation = tio.Compose([
-		# 	tio.RandomElasticDeformation(
-		# 		p=self.augmentation_prob,
-		# 		num_control_points=7,  # or just 7
-    	# 		locked_borders=1,),
-		# ])
+		affine = tio.Compose([
+			tio.RandomAffine(
+				p=self.augmentation_prob,
+				scales=(0.9, 1.2),
+
+    			degrees=10,
+			)
+		])
 		random_bias = tio.Compose([
 			## Make the training set hard and there is a huge different between the training loss and validation loss
 			# tio.RandomElasticDeformation(   
 			# 	num_control_points=7,  # or just 7
     		# 	locked_borders=2,),
 			
-			tio.RandomBiasField(p=self.augmentation_prob)
+			tio.RandomBiasField(p=self.augmentation_prob),
+			
 		])
+
 
 
 
@@ -103,14 +109,21 @@ class ImageFolder(data.Dataset):
 		augmented={}
 		if self.mode == "train": 
 			augmented = trans(image=image, mask=GT)
+			image = augmented["image"]
+			GT = augmented["mask"]
+			
 			# I used expand dims because the tranformation in torch io applied in 3D volumes
-			image = random_bias(np.expand_dims(augmented["image"], axis=0))
-			# image = deformation(image)
-			# GT = deformation(np.expand_dims(augmented["mask"], axis=0))
-			GT = np.expand_dims(augmented["mask"], axis=0)
+			# image = random_bias(np.expand_dims(augmented["image"], axis=0))
 
-			image = to_tensor(image.squeeze(axis=-1)).permute(1,2,0)
-			GT = to_tensor(GT.squeeze(axis=-1)).permute(1,2,0)
+			# GT = np.expand_dims(augmented["mask"], axis=0)
+			# image = to_tensor(image.squeeze(axis=-1)).permute(1,2,0)
+			# GT = to_tensor(GT.squeeze(axis=-1)).permute(1,2,0)
+
+		if self.slave:
+			sl = affine(np.expand_dims(augmented["image"], axis=0))
+			sl = to_tensor(sl.squeeze(axis=-1)).permute(1,2,0)
+			return [sl,image], GT.type(torch.long)
+	
 		else:
 			image = to_tensor(image)
 			GT = to_tensor(GT)
@@ -123,31 +136,34 @@ class ImageFolder(data.Dataset):
 		"""Returns the total number of font files."""
 		return len(self.image_paths)
 
-def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',is_multiorgan=True, augmentation_prob=0.4, classes = None):
+def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',is_multiorgan=True, augmentation_prob=0.4, classes = None, slave= False):
 	"""Builds and returns Dataloader."""
-	
-	dataset = ImageFolder(root = image_path, image_size =image_size, mode=mode,augmentation_prob=augmentation_prob, is_multiorgan=is_multiorgan, classes=classes)
+	print("Slave: {}". format(slave))
+	dataset = ImageFolder(root = image_path, image_size =image_size, mode=mode,augmentation_prob=augmentation_prob, is_multiorgan=is_multiorgan, classes=classes,slave = slave)
 	data_loader = data.DataLoader(dataset=dataset,
 								  batch_size=batch_size,
 								  shuffle=True,
-								  num_workers=num_workers)
+								  num_workers=num_workers
+								  )
 	return data_loader
 # 	return dataset
 
 # import matplotlib.pyplot as plt 
 # path='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train'
 # classes = {255: 1, 127: 2, 85: 3, 63: 4}
-# dataload = get_loader(path,256,1,is_multiorgan=True,mode="train",classes =classes)
+# dataload = get_loader(path,256,1,is_multiorgan=True,mode="test",classes =classes, slave=False)
 
 # # image,mask = dataload.__getitem__(55)
 # for (image,mask) in dataload:
 # 	# transforms = T.Compose([T.ToPILImage()])
+# 	# slave = image[0].data.cpu().detach().numpy().squeeze()
 # 	image = image.data.cpu().detach().numpy().squeeze()
+
 # 	mask = mask.data.cpu().detach().numpy().squeeze()
 # 	# print (np.unique(mask))
 # 	fig, ax1 = plt.subplots(1,1)
 # 	ax1.imshow(image, cmap="gray")
-# 	ax1.imshow(mask, cmap="jet", alpha= 0.1 )
+# 	ax1.imshow(mask, cmap="jet",alpha=0.5)
 
 # 	plt.show()
 
