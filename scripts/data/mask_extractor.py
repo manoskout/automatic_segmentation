@@ -266,33 +266,24 @@ class MaskBuilder:
             mask_path
           )
       
-      # else:
-        # mask =np.array(masks, dtype=np.uint8)
-      # if mask.size!=0:
-        
-        # mask = Image.fromarray((mask*avg_value_of_classes).astype(np.uint8))
-      # print(np.unique(mask))
-        # slc = case[1]["slice"]
-        # mask.save("{}/{}_{}.png".format(mask_path,patient[0:3],case[0]))
-        # print("Mask saved : {}/{}.png".format(os.path.join(mask_path,segment),case[0]))
-    if save_type == "nifti":
-      try:
-        self.save_as_nifti(
-          np.array(masks, dtype=np.uint8).transpose([2,1,0]),
-          patient+"_masks",
-          result_path
+      if save_type == "nifti":
+        try:
+          self.save_as_nifti(
+            np.array(masks, dtype=np.uint8).transpose([2,1,0]),
+            patient+"_masks",
+            mask_path
+            )
+          self.save_as_nifti(
+            np.array(slices).transpose([2,1,0]),
+            patient,
+            mri_path
+            )
+          print("All files saved succesfully.")
+        except ValueError:
+          print(
+            "Axes do not match array. Probably patient {patient} does not have all the requested organs segmented"
+            .format(patient=patient)
           )
-        self.save_as_nifti(
-          np.array(slices).transpose([2,1,0]),
-          patient,
-          result_path
-          )
-        print("All files saved succesfully.")
-      except ValueError:
-        print(
-          "Axes do not match array. Probably patient {patient} does not have all the requested organs segmented"
-          .format(patient=patient)
-        )
 
     
     
@@ -354,7 +345,7 @@ if __name__ =="__main__":
   parser.add_argument("-d","--dataset-folder", type=str, default="C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset", help="The folder that contains all patients")
   parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"], help="Provide the list with the organs that you want to segment, if the names are known")
   parser.add_argument("--include_rt_struct", action="store_true", help="Create and nii file with mask. Only if the patient contains rt struct file")
-  parser.add_argument("-o", "--output_path", type=str, default= "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass", help="The output file is save into the patients folder by default")
+  parser.add_argument("-o", "--output_path", type=str, default= "C:\\Users\\ek779475\\Documents\\Koutoulakis", help="The output file is save into the patients folder by default")
   parser.add_argument("--contours_only", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
   parser.add_argument("--delete_nifti", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
   parser.add_argument("--save_type", default="dicom", help="[nifti/dicom] Save the output as nifti (series of slice) or dicom (each slice seperately)")
