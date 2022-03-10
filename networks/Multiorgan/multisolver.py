@@ -1,3 +1,4 @@
+import argparse
 import os
 import numpy as np
 import torch
@@ -9,20 +10,28 @@ from utils_metrics import AverageMeter, EarlyStopping
 import segmentation_models_pytorch as smp 
 from losses import DiceLoss
 # from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
-from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
+from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net, SlaveAttU_Net
 import csv
 from tqdm import tqdm
+from torch.utils import data
 from torch.utils.tensorboard import SummaryWriter
 
 
 class MultiSolver(object):
-	def __init__(self, config, train_loader, valid_loader, test_loader, classes, save_images: bool= False):
+	def __init__(
+		self, config: argparse.Namespace, train_loader: data.DataLoader, 
+		valid_loader: data.DataLoader, 
+		classes: list, save_images: bool= False) -> None:
+
+		# Paths
+		self.model_path = config.model_path
+		self.result_path = config.result_path
+		self.mode = config.mode
 
 		# Data loader
 
 		self.train_loader = train_loader
 		self.valid_loader = valid_loader
-		self.test_loader = test_loader
 		if config.type == "multiclass":
 			self.classes = classes
 			del self.classes[0] # Delete the background label
@@ -56,11 +65,7 @@ class MultiSolver(object):
 		self.num_epochs_decay = config.num_epochs_decay
 		self.batch_size = config.batch_size
 		
-		# Path
-		self.model_path = config.model_path
-		self.result_path = config.result_path
-		self.mode = config.mode
-
+		
 		# Set tensorboard writer
 		self.writer = SummaryWriter(log_dir=config.log_dir)
 
@@ -75,18 +80,37 @@ class MultiSolver(object):
 		"""Build generator and discriminator."""
 		# TODO -> Dropout layers are not implemented into the R2U_net and R2Att_unet
 		if self.smp_enabled:
-			self.unet = smp.DeepLabV3Plus(
-				encoder_name=self.encoder_name,        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-				encoder_weights=self.encoder_weights,     # use `imagenet` pre-trained weights for encoder initialization
-				in_channels=self.img_ch,        # model input channels (1 for gray-scale images, 3 for RGB, etc.)
-				classes=self.output_ch,         # model output channels (number of classes in your dataset)
-			)
+			if self.model_type == "DeepLabV3+":
+				self.unet = smp.DeepLabV3Plus(
+					encoder_name=self.encoder_name,        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+					encoder_weights=self.encoder_weights,     # use `imagenet` pre-trained weights for encoder initialization
+					in_channels=self.img_ch,        # model input channels (1 for gray-scale images, 3 for RGB, etc.)
+					classes=self.output_ch,         # model output channels (number of classes in your dataset)
+				)
+			elif self.model_type == "U_Net":
+				self.unet = smp.Unet(
+					encoder_name=self.encoder_name,       
+					encoder_weights=self.encoder_weights,    
+					in_channels=self.img_ch,       
+					classes=self.output_ch,         
+				)
+			elif self.model_type == "U_Net_plus":
+				self.unet = smp.UnetPlusPlus(
+					encoder_name=self.encoder_name,        
+					encoder_weights=self.encoder_weights,    
+					in_channels=self.img_ch,       
+					classes=self.output_ch,         
+				)
+			# elif self.model_type =="":
+			# 	self.unet = smp.
 		elif self.model_type =='U_Net':
 			self.unet = U_Net(img_ch=self.img_ch,output_ch=self.output_ch, dropout=self.dropout)
 		elif self.model_type =='R2U_Net':
 			self.unet = R2U_Net(img_ch=self.img_ch,output_ch=self.output_ch,t=self.t)
 		elif self.model_type =='AttU_Net':
 			self.unet = AttU_Net(img_ch=self.img_ch,output_ch=self.output_ch, dropout=self.dropout)
+		elif self.model_type =='SlaveAttU_Net':
+			self.unet = SlaveAttU_Net(img_ch=self.img_ch,output_ch=self.output_ch, dropout=self.dropout)
 		elif self.model_type == 'R2AttU_Net':
 			self.unet = R2AttU_Net(img_ch=self.img_ch,output_ch=self.output_ch,t=self.t)
 			
@@ -95,10 +119,10 @@ class MultiSolver(object):
 		self.optimizer = optim.Adam(list(self.unet.parameters()),
 									 self.lr, [self.beta1, self.beta2],weight_decay=1e-5)
 		self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-			self.optimizer,"min", patience=self.num_epochs_decay)
+			self.optimizer,"min", patience=self.num_epochs_decay, verbose=True,min_lr = 1e-6)
 		self.unet.to(self.device)
 
-	def classes_to_mask(self,mask):
+	def classes_to_mask(self,mask : torch.Tensor) -> torch.Tensor:
 		"""Converts the labeled pixels to range 0-255
 		"""
 		for index, k in enumerate(self.classes):
@@ -106,17 +130,6 @@ class MultiSolver(object):
 
 
 		return mask.type(torch.float)
-
-	def give_colour(out):  # --> Not used
-		class_to_color = [torch.tensor([1.0, 0.0, 0.0]), ...]
-		output = torch.zeros(1, 3, out.size(-2), out.size(-1), dtype=torch.float)
-		for class_idx, color in enumerate(class_to_color):
-			mask = out[:,class_idx,:,:] == torch.max(out, dim=1)[0]
-			mask = mask.unsqueeze(1) # should have shape 1, 1, 100, 100
-			curr_color = color.reshape(1, 3, 1, 1)
-			segment = mask*color # should have shape 1, 3, 100, 100
-			output += segment
-		return output
 
 	def save_validation_results(self, image, pred_mask, true_mask,epoch):
 
@@ -155,9 +168,9 @@ class MultiSolver(object):
 			)
 		)
 
-	def _update_metricRecords(self,csv_writer,mode,metric, classes=None):	
+	def _update_metricRecords(self,csv_writer,mode,metric, classes=None) -> None:	
 		avg_metrics = [
-					self.epoch+1,self.lr, metric.avg_loss, 
+					self.epoch+1,self.optimizer.param_groups[0]['lr'], metric.avg_loss, 
 					metric.all_precision, metric.all_recall, metric.all_sensitivity, 
 					metric.all_specificity, metric.all_dice, metric.all_iou,
 					metric.all_hd,metric.all_hd95
@@ -181,8 +194,6 @@ class MultiSolver(object):
 			avg_metrics
 			)
 	
-
-
 	def evaluation(self) -> float:
 		"""
 		"""
@@ -220,31 +231,35 @@ class MultiSolver(object):
 		self.unet.train()
 		if self.save_images:
 			self.save_validation_results(image, pred_mask, true_mask,self.epoch)
-		if self.min_valid_loss > metrics.avg_loss:
-			print(f'[Validation] Loss Decreased({self.min_valid_loss:.6f}--->{metrics.avg_loss:.6f}) \t Saving The Model')
-			self.min_valid_loss = metrics.avg_loss
-			# Saving State Dict
-			torch.save(self.unet.state_dict(), unet_path)
-		print(f'[Validation] --> Epoch [{self.epoch+1}/{self.num_epochs}], Loss: {metrics.avg_loss}, DC: {metrics.all_dice}, \
-			Recall: {metrics.all_recall}, Precision: {metrics.all_precision}, Specificity: {metrics.all_specificity}, \
-			Sensitivity: {metrics.all_sensitivity}, IoU: {metrics.all_iou} , HD: {metrics.all_hd}, HD95: {metrics.all_hd95}')
+		print('[Validation] --> Epoch [{epoch}/{epochs}], Loss: {avgLoss}, DC: {dc}, Recall: {recall}, Precision: {prec}, Specificity: {spec}, Sensitivity: {sens}, IoU: {iou} , HD: {hd}, HD95: {hd95}'
+		.format(epoch=self.epoch+1, epochs=self.num_epochs,avgLoss = metrics.avg_loss, dc= metrics.all_dice,
+		recall = metrics.all_recall, prec= metrics.all_precision, spec= metrics.all_specificity, sens = metrics.all_sensitivity,
+		iou = metrics.all_iou, hd= metrics.all_hd, hd95=metrics.all_hd95))
 		self._update_metricRecords(self.wr_valid,"Validation",metrics, self.classes)
-		return loss.item()
+		return metrics.avg_loss
 	
-	def train_epoch(self):
+	def train_epoch(self) -> None:
 		self.unet.train(True)
 		metrics = AverageMeter()
 		epoch_loss_values = list()
+		contain_slave = False # It should be changed!!!!!!!!! SOS
 		with tqdm(total=self.n_train, desc=f'Epoch {self.epoch + 1}/{self.num_epochs}', unit='img') as pbar:
 			for i, (image, true_mask) in enumerate(self.train_loader):
-				image = image.to(self.device,dtype=torch.float32)
-				true_mask = true_mask.to(self.device, dtype=torch.long)
+				if type(image) == list:
+					slave = image[0].to(self.device,dtype=torch.float32)
+					image = image[1].to(self.device,dtype=torch.float32)
 
+				else:
+					image = image.to(self.device,dtype=torch.float32)
+				true_mask = true_mask.to(self.device, dtype=torch.long)
 				assert image.shape[1] == self.img_ch, f'Network has been defined with {self.img_ch} input channels'
 				self.optimizer.zero_grad(set_to_none=True)
 				# with torch.cuda.amp.autocast(enabled=self.amp):
-				pred_mask = self.unet(image)
+				if contain_slave:
+					pred_mask = self.unet(image,slave)
 
+				else:
+					pred_mask = self.unet(image)
 
 				if self.output_ch > 1:
 					loss = self.criterion(pred_mask,true_mask[:,0,:,:])
@@ -255,12 +270,11 @@ class MultiSolver(object):
 				self.optimizer.step()
 				pbar.update(int(image.shape[0]/self.batch_size))
 				self.global_step +=1
+				
 				metrics.update(loss.item(), true_mask, pred_mask, image.size(0), classes=self.classes)
 
 				pbar.set_postfix(**{'loss (batch)': loss.item()})
 			epoch_loss_values.append(metrics.avg_loss)
-
-
 		# Print the log info
 		print(f"[Training] [{self.epoch+1}/{self.num_epochs}, Lr: {self.optimizer.param_groups[0]['lr']}], Loss: {metrics.avg_loss}, DC: {metrics.all_dice}, \
 			Recall: {metrics.all_recall}, Precision: {metrics.all_precision}, Specificity: {metrics.all_specificity}, \
@@ -268,12 +282,20 @@ class MultiSolver(object):
 			HD: {metrics.all_hd}, HD95: {metrics.all_hd95}")
 
 		self._update_metricRecords(self.wr_train,"Training",metrics, self.classes)
-
-	def train_model(self):
-		"""Train encoder, generator and discriminator."""
-
-		#====================================== Training ===========================================#
 		
+		#===================================== Validation ====================================#
+		division_step = (self.n_train // (10 * self.batch_size))
+		if division_step > 0:
+			# if self.global_step % division_step == 0:	
+			val_loss = self.evaluation()
+			self.scheduler.step(metrics.avg_loss)
+
+		# TODO : Change this command below
+		self.lr = self.optimizer.param_groups[0]['lr']
+		self.early_stopping(val_loss, self.unet)
+		
+	def train_model(self) -> None:
+		"""Training"""		
 		unet_path = os.path.join(
 			self.result_path, 
 			'%s-%d-%.4f-%d.pkl' %(
@@ -300,9 +322,10 @@ class MultiSolver(object):
 			encoding='utf-8', 
 			newline=''
 		)
-
 		self.wr_train = csv.writer(training_log)
 		self.wr_valid = csv.writer(validation_log)
+
+		self.early_stopping = EarlyStopping(patience=20, verbose=True, path=unet_path)
 		val_loss = 0
 		metric_list = ["epoch","lr", "loss", "precision", "recall", "sensitivity", "specificity", "dice", "iou","hd","hd95"]
 		if self.classes:
@@ -312,7 +335,6 @@ class MultiSolver(object):
 		self.wr_valid.writerow(metric_list)
 		self.wr_train.writerow(metric_list)
 		
-		early_stopping = EarlyStopping(patience=5, verbose=True)
 
 		# U-Net Train
 		if os.path.isfile(unet_path):
@@ -324,30 +346,9 @@ class MultiSolver(object):
 			self.global_step = 0
 			for epoch in range(self.num_epochs):
 				self.epoch = epoch
-				self.train_epoch()
-				# Decay learning rate
-				# print(f"epoch decay:{self.num_epochs - self.num_epochs_decay}")
-				# if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
-				# 	self.lr -= (self.lr / float(self.num_epochs_decay))
+				self.train_epoch()				
 
-				# 	for param_group in self.optimizer.param_groups:
-				# 		param_group['lr'] = self.lr
-				# 	print ('Decay learning rate to lr: {}.'.format(self.lr))
-				
-				
-				#===================================== Validation ====================================#
-				division_step = (self.n_train // (10 * self.batch_size))
-				if division_step > 0:
-					# if self.global_step % division_step == 0:	
-					val_loss = self.evaluation()
-				
-				# TODO : Change this command below
-				self.scheduler.step(val_loss)
-
-				self.lr = self.optimizer.param_groups[0]['lr']
-				early_stopping(val_loss, self.unet)
-        
-				if early_stopping.early_stop:
+				if self.early_stopping.early_stop:
 					print("Early stopping")
 					training_log.close()
 					validation_log.close()
