@@ -95,16 +95,20 @@ def save_validation_results(cfg,image, pred_mask, true_mask,epoch):
     ax.imshow(pred_mask,cmap="jet",interpolation='none', alpha = 0.5)
     ax.axes.xaxis.set_visible(False)
     ax.axes.yaxis.set_visible(False)
-
-    plt.grid(False)
-    plt.show()
+    plt.savefig(os.path.join(
+            cfg.result_path,
+            '%s_test_%d_result_INPUT.png'%(cfg.model_type,epoch+1)
+            )
+    )
+    # plt.grid(False)
+    # plt.show()
     
 
 def _update_metricRecords(tens_writer,csv_writer,mode,metric, classes=None, step=None) -> None:	
     avg_metrics = [
-                metric.precision, metric.recall, metric.sensitivity, 
-                metric.specificity, metric.dice, metric.iou,
-                metric.hd,metric.hd95
+                metric.precision.mean(), metric.recall.mean(), metric.sensitivity.mean(),
+                metric.specificity.mean(), metric.dice.mean(), metric.iou.mean(),
+                metric.hd.mean(),metric.hd95.mean()
             ]
     
     if classes:
