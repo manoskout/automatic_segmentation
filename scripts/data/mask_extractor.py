@@ -279,7 +279,7 @@ class MaskBuilder:
             patient,
             mri_path
             )
-          print("All files saved succesfully.")
+          # print("All files saved succesfully.")
         except ValueError:
           pass
 
