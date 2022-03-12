@@ -67,7 +67,7 @@ class ImageFolder(data.Dataset):
 				p=self.augmentation_prob,
 				scales=(0.9, 1.2),
 
-    			degrees=10,
+    			degrees=5,
 			)
 		])
 		random_bias = tio.Compose([
@@ -88,6 +88,8 @@ class ImageFolder(data.Dataset):
 		image = limiting_filter(image,threshold=10,display=False)
 		GT = cv.imread(GT_path, cv.IMREAD_GRAYSCALE)
 		image = image/np.max(image)
+		# Check the min max normalization 
+		# image = (image-np.min(image))/(np.max(image)-np.min(image))
 		image = image.astype(np.float32)
 		# Resize keeping the same geometry
 		image = crop_and_pad(image,self.image_size,display=False)

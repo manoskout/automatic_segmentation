@@ -45,7 +45,6 @@ def load_dcm_rt_from_path(dicom_series_path: str, rt_struct_path: str):
 
       for file in sorted(files):
         try:
-          # print(file)
           ds = dcmread(os.path.join(root, file))
           if hasattr(ds, "pixel_array"):
               series_data.append(ds)
@@ -85,7 +84,7 @@ def poly_to_mask(polygon, width, height, label = 1):
 class MaskBuilder:
   """Wrapper class to facilitate appending and extracting ROI's within an RTStruct
   """
-  def __init__(self, dataset_path: str, series_data: list, rt_struct: FileDataset, is_multiorgan=True,contours_only=False, OARS = [], ROIGenerationAlgorithm=0):
+  def __init__(self, dataset_path: str, series_data: list, rt_struct: FileDataset, is_multiorgan=True,contours_only=False, OARS: list = [], step_splitter: int=0, ROIGenerationAlgorithm=0):
     self.dataset_path = dataset_path
     self.is_multiorgan = is_multiorgan
     self.OARS = OARS
@@ -93,6 +92,7 @@ class MaskBuilder:
     self.rt_struct = rt_struct
     self.mask_data={}
     self.contours_only = contours_only
+    self.step_splitter = step_splitter
   
   def get_roi_names(self):
     """Returns a list of the names of all ROI within the RTStruct
@@ -212,9 +212,13 @@ class MaskBuilder:
         if self.rt_struct:
           for name, oar in refROInumbers.items():
               for contour in self.rt_struct.ROIContourSequence[oar["id"]].ContourSequence:
+                  # print(contour)
                   if hasattr(contour,"ContourImageSequence"):
                       if contour.ContourImageSequence[0].ReferencedSOPInstanceUID == slice.SOPInstanceUID:
-                          # print(f"Label : {label}, OAR: {oar}   OARSSSS : {self.OARS}")
+                          print(contour.ContourImageSequence[0].ReferencedSOPInstanceUID[0:-3]," == ",slice.SOPInstanceUID[0:-4])
+                          
+
+                          print(f" OAR: {oar}   OARSSSS : {self.OARS}")
                           mask_coords = self.update_pixel_coords(slice, contour)
                           mask = poly_to_mask(mask_coords, width=width,height=height,label = oar["label"])
                           mask_dict[slice.SOPInstanceUID].append(mask) 
@@ -245,14 +249,37 @@ class MaskBuilder:
 
     masks=[]
     slices = []
-    for (index,case) in self.mask_data.items():
+    split_counter = 0
+    for num, (index,case) in enumerate(self.mask_data.items(),1):
+      # print(num)
       mask= case["mask"] if "mask" in case.keys() and self.rt_struct else None
       if mask is not None and len(np.unique(mask))==len(self.OARS)+1: # +1 is because se background
+        split_counter += 1
         mask = sum(mask) if mask is not None else None
         mask = np.where(mask==0, mask, 255/mask).astype(np.uint8) if mask is not None else None
         masks.append(mask) 
         slice = case["slice"]
         slices.append(slice.pixel_array)
+        if self.step_splitter is not None and split_counter%self.step_splitter==0:
+          if save_type == "nifti":
+            try:
+              self.save_as_nifti(
+                np.array(masks, dtype=np.uint8).transpose([2,1,0]),
+                patient+ str(split_counter)  +"_masks",
+                mask_path
+                )
+              self.save_as_nifti(
+                np.array(slices).transpose([2,1,0]),
+                patient+ str(split_counter),
+                mri_path
+                )
+              # print("All files saved succesfully.")
+            except ValueError:
+              print("Saved in : ", result_path)
+
+              pass
+          masks=[]
+          slices = []
         if save_type == "dicom":
           self.save_as_dicom(
             slice,
@@ -267,21 +294,7 @@ class MaskBuilder:
             mask_path
           )
       
-      if save_type == "nifti":
-        try:
-          self.save_as_nifti(
-            np.array(masks, dtype=np.uint8).transpose([2,1,0]),
-            patient+"_masks",
-            mask_path
-            )
-          self.save_as_nifti(
-            np.array(slices).transpose([2,1,0]),
-            patient,
-            mri_path
-            )
-          # print("All files saved succesfully.")
-        except ValueError:
-          pass
+      
 
     
     
@@ -301,8 +314,8 @@ def main(config):
   if config.delete_nifti:
     clean_existed_masks(DATASET_PATH,"nifti")
     return 0
-  PATIENT_FOLDERS = [patient for patient in get_patient_folder_list(DATASET_PATH)]
-  # print(PATIENT_FOLDERS)
+  PATIENT_FOLDERS = [patient for patient in get_patient_folder_list(DATASET_PATH)][0:2]
+  print(PATIENT_FOLDERS)
   doubled_rt_structs=[]
   patient_with_doubled_rt = []
   OARS = config.oars
@@ -310,11 +323,12 @@ def main(config):
   for patient_path in PATIENT_FOLDERS:
     patient = os.path.basename(patient_path)
     logging.info("Mask extraction for the patient: {} started".format(patient))
-    mris = [out for out in os.listdir(patient_path) if "ScalarVolume" in out ][0]
+    mris = [out for out in os.listdir(patient_path) if "MR" in out and out[0]!="." ][0]
+    print(mris)
     mri_path = os.path.join(patient_path,mris)
     
     if config.include_rt_struct:
-      structs = [out for out in os.listdir(patient_path) if "STRU" in out ][0]
+      structs = [out for out in os.listdir(patient_path) if "res" in out ][0]
       struct_path = os.path.join(patient_path,structs)
       # print(struct_path)
       
@@ -326,8 +340,7 @@ def main(config):
     if not os.path.exists(output_path):
       os.mkdir(output_path)
     series,rt_struct = load_dcm_rt_from_path(mri_path,struct_path)
-    
-    mb = MaskBuilder(DATASET_PATH,series, rt_struct, OARS = OARS, contours_only= config.contours_only)
+    mb = MaskBuilder(DATASET_PATH,series, rt_struct, OARS = OARS, contours_only= config.contours_only, step_splitter=config.step_splitter)
     roi_names = mb.get_roi_names()
     logging.info(f"Available rois: {roi_names}") if config.include_rt_struct else print("\n")
     mb.create_masks()
@@ -340,13 +353,18 @@ def main(config):
 if __name__ =="__main__":
   parser = argparse.ArgumentParser(description="Automated conversion from dicom series and rt struct to nifti.")
   # "RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"
-  parser.add_argument("-d","--dataset-folder", type=str, default="C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset", help="The folder that contains all patients")
+  # parser.add_argument("-d","--dataset-folder", type=str, default="C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset", help="The folder that contains all patients")
   parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"], help="Provide the list with the organs that you want to segment, if the names are known")
   parser.add_argument("--include_rt_struct", action="store_true", help="Create and nii file with mask. Only if the patient contains rt struct file")
   parser.add_argument("-o", "--output_path", type=str, default= "C:\\Users\\ek779475\\Documents\\Koutoulakis", help="The output file is save into the patients folder by default")
+  
+  parser.add_argument("-d","--dataset-folder", type=str, default="C:\\Users\\ek779475\\Desktop\\Dataset_Backup\\PRO_pCT_CGFL", help="The folder that contains all patients")
+
   parser.add_argument("--contours_only", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
   parser.add_argument("--delete_nifti", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
-  parser.add_argument("--save_type", default="dicom", help="[nifti/dicom] Save the output as nifti (series of slice) or dicom (each slice seperately)")
+  parser.add_argument("--save_type", default="nifti", help="[nifti/dicom] Save the output as nifti (series of slice) or dicom (each slice seperately)")
+  parser.add_argument("--step_splitter", type= int, default=2, help="Created nifti files with 3 slices per nifti (Used for 2.5D Architectures)")
+  
   arguments= parser.parse_args()
   main(arguments)
 

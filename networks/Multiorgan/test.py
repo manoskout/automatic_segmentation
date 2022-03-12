@@ -199,9 +199,9 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=4)
     # misc
     parser.add_argument('--mode', type=str, default='test')
-    parser.add_argument('--model_name', type=str, default='U_Net_plus-200-0.0010-5.pkl')
-    parser.add_argument('--model_type', type=str, default='U_Net_plus', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net_plus\\resnet152_None_10_3_multiclass_200_4')
+    parser.add_argument('--model_name', type=str, default='checkpoint.pkl')
+    parser.add_argument('--model_type', type=str, default='AttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
+    parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\AttU_Net\\10_3_multiclass_200_4')
     parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\test')
     parser.add_argument('--result_path', type=str, default='')
 

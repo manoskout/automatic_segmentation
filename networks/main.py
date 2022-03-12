@@ -61,14 +61,6 @@ def main(config):
                             num_workers=config.num_workers,
                             classes = classes,
                             mode='valid')
-    # test_loader = get_loader(image_path=config.test_path,
-    #                         image_size=config.image_size,
-    #                         batch_size=config.batch_size,
-    #                         num_workers=config.num_workers,
-    #                         classes = classes,
-    #                         mode='test')
-
- 
 
     
     # Train and sample the images
@@ -116,7 +108,7 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', type=float, default=0., help="Set a dropout value in order to set a dropout layers into the model") 
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
-    parser.add_argument('--early_stopping', type=int, default=20, help="Set the early stopping `patience` variable")
+    parser.add_argument('--early_stopping', type=int, default=25, help="Set the early stopping `patience` variable")
 
     # To pass an list argument, you should type
     # i.e. python main.py --classes RECTUM VESSIE TETE_FEMORALE_D TETE_FEMORALE_G
