@@ -6,7 +6,7 @@ torch.cuda.empty_cache()
 import torchvision
 from torch import optim
 from utils_metrics import DiceBCELoss, collect_metrics
-from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
+from networks.network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
