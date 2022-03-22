@@ -17,15 +17,17 @@ from tqdm import tqdm
 from torch.utils import data
 from torch.utils.tensorboard import SummaryWriter
 from Multiorgan.utils import build_model
+from sklearn.model_selection import KFold
 
 
 class MultiSolver(object):
 	def __init__(
-		self, config: argparse.Namespace, train_loader: data.DataLoader, 
-		valid_loader: data.DataLoader, 
-		classes: list, save_images: bool= True) -> None:
+		self, config: argparse.Namespace, train_loader: data.DataLoader,  
+		classes: list, save_images: bool= True,) -> None:
+		# K_fold Cross validation
 
-		# Paths
+		self.k_folds = config.k_folds
+		# paths
 		self.model_path = config.model_path
 		self.result_path = config.result_path
 		self.mode = config.mode
@@ -33,7 +35,7 @@ class MultiSolver(object):
 		# Data loader
 
 		self.train_loader = train_loader
-		self.valid_loader = valid_loader
+		# self.valid_loader = valid_loader
 		if config.type == "multiclass":
 			self.classes = classes
 			del self.classes[0] # Delete the background label
@@ -67,11 +69,6 @@ class MultiSolver(object):
 		self.num_epochs = config.num_epochs
 		self.num_epochs_decay = config.num_epochs_decay
 		self.batch_size = config.batch_size
-		
-		
-		# Set tensorboard writer
-		self.writer = SummaryWriter(log_dir=config.log_dir)
-
 
 		self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 		print("Device that is in use : {}".format(self.device))
@@ -246,20 +243,23 @@ class MultiSolver(object):
 		self.lr = self.optimizer.param_groups[0]['lr']
 		self.early_stopping(val_loss, self.unet)
 		
-	def train_model(self) -> None:
-		"""Training"""		
+	def train_model(self,fold) -> None:
+		"""Training"""
+		# Set tensorboard writer
+		self.writer = SummaryWriter(log_dir=self.log_dir+f"_fold_{fold}")		
 		unet_path = os.path.join(
 			self.result_path, 
-			'%s-%d-%.4f-%d.pkl' %(
+			'%s-%d-%.4f-%d_%s.pkl' %(
 				self.model_type,
 				self.num_epochs,
 				self.lr,
-				self.num_epochs_decay)
+				self.num_epochs_decay,
+				fold)
 			)
 		training_log = open(
 			os.path.join(
 				self.result_path,
-				'result_train.csv'
+				f'result_train_{fold}.csv'
 			),
 			'a', 
 			encoding='utf-8', 
@@ -268,7 +268,7 @@ class MultiSolver(object):
 		validation_log = open(
 			os.path.join(
 				self.result_path,
-				'result_validation.csv'
+				f'result_validation_{fold}.csv'
 			), 
 			'a', 
 			encoding='utf-8', 

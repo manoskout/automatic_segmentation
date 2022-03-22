@@ -1,8 +1,12 @@
 import argparse
 import os
+from re import I
+
+from sklearn.model_selection import KFold
+import torch
 from Multiorgan.multisolver import MultiSolver
 from Binary.solver import Solver
-from loaders.data_loader import get_loader
+from loaders.data_loader import ImageFolder, get_loader
 from torch.backends import cudnn
 import random
 from datetime import datetime
@@ -21,13 +25,13 @@ def class_mapping(classes):
 
 def main(config):
     print(config.result_path)
-    cudnn.benchmark = True
-    if config.model_type not in ['U_Net_plus','U_Net','DeepLabV3','ResAttU_Net','DeepLabV3+','R2U_Net','AttU_Net','R2AttU_Net']:
-        print('ERROR! Choose the right model')
-        return
+    # cudnn.benchmark = True
+    # if config.model_type not in ['U_Net_plus','U_Net','DeepLabV3','ResAttU_Net','DeepLabV3+','R2U_Net','AttU_Net','R2AttU_Net']:
+    #     print('ERROR! Choose the right model')
+    #     return
     
-    if not os.path.exists(config.result_path):
-        os.makedirs(config.result_path)
+    # if not os.path.exists(config.result_path):
+    #     os.makedirs(config.result_path)
     
 
     lr = config.lr 
@@ -40,31 +44,42 @@ def main(config):
     print(config)    
     classes = class_mapping(config.classes)
     
-    train_loader = get_loader(image_path=config.train_path,
-                            image_size=config.image_size,
-                            batch_size=config.batch_size,
-                            num_workers=config.num_workers,
-                            classes = classes,
-                            mode='train')
-    valid_loader = get_loader(image_path=config.valid_path,
-                            image_size=config.image_size,
-                            batch_size=config.batch_size,
-                            num_workers=config.num_workers,
-                            classes = classes,
-                            mode='valid')
+    
 
     
     # Train and sample the images
-    if config.type == "binary":
-        solver = Solver(config, train_loader, valid_loader, None) # Remove test loader from Solver
-        if config.mode == 'train':
-            solver.train_model()
-    elif config.type == "multiclass":
-        multisolver = MultiSolver(config, train_loader, valid_loader, classes=classes, save_images=False)
-        if config.mode == 'train':
-            multisolver.train_model()
-        
 
+        
+    if config.mode == 'train':
+        # Define the K-fold Cross Validator
+        kfold = KFold(n_splits=config.k_folds, shuffle=False)
+        dataset = ImageFolder(
+            root = config.train_path, 
+            image_size =config.image_size, 
+            mode=config.mode,
+            augmentation_prob=0.4, 
+            is_multiorgan=True, 
+            classes=classes
+            )
+
+        for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
+            train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
+            valid_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
+            train_loader = torch.utils.data.DataLoader(
+                dataset,
+                batch_size=config.batch_size,
+                num_workers=config.num_workers,
+                shuffle = False,
+                sampler = train_subsampler)
+            valid_loader = torch.utils.data.DataLoader(
+                dataset,
+                batch_size=config.batch_size,
+                num_workers=config.num_workers,
+                shuffle = False,
+                sampler = valid_subsampler)
+            solver = Solver(config, train_loader, valid_loader, None) if config.type == "binary" else MultiSolver(config, train_loader, valid_loader, classes=classes, save_images=False)
+            print("K-Fold cross validation. Current fold: {}".format(fold))
+            solver.train_model(fold)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -97,6 +112,7 @@ if __name__ == '__main__':
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
     parser.add_argument('--early_stopping', type=int, default=25, help="Set the early stopping `patience` variable")
+    parser.add_argument('--k_folds', type=int, default=5, help="Set the early stopping `patience` variable")
 
     # To pass an list argument, you should type
     # i.e. python main.py --classes RECTUM VESSIE TETE_FEMORALE_D TETE_FEMORALE_G
@@ -115,8 +131,8 @@ if __name__ == '__main__':
         config.log_dir = f"./runs/{config.type}/{config.encoder_name}_{config.encoder_weights}_{day}_{month}_{config.model_type}_{config.num_epochs}_{config.batch_size}"
         config.result_path=f'./result/{config.model_type}/{config.encoder_name}_{config.encoder_weights}_{day}_{month}_{config.type}_{config.num_epochs}_{config.batch_size}'
     else:
-        config.log_dir = f"./runs/{config.type}/{day}_{month}_{config.model_type}_{config.num_epochs}_{config.batch_size}_focal"
-        config.result_path=f'./result/{config.model_type}/{day}_{month}_{config.type}_{config.num_epochs}_{config.batch_size}_focal'
+        config.log_dir = f"./runs/{config.type}/{day}_{month}_{config.model_type}_{config.num_epochs}_{config.batch_size}"
+        config.result_path=f'./result/{config.model_type}/{day}_{month}_{config.type}_{config.num_epochs}_{config.batch_size}'
     try:
         main(config)
     except KeyboardInterrupt:
