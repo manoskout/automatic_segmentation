@@ -18,15 +18,14 @@ from loaders.preprocessing import crop_and_pad, limiting_filter
 
 
 class ImageFolder(data.Dataset):
-	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.5, is_multiorgan = True, slave =False):
+	def __init__(self, root,image_size=256,mode='train',classes = None, augmentation_prob=0.4, is_multiorgan = True):
 		"""Initializes image paths and preprocessing module."""
-		self.slave = slave
 		self.root = root
 		self.is_multiorgan = is_multiorgan
 		self.classes = classes
 		self.augmentation_prob = augmentation_prob
 		# GT : Ground Truth
-		img_path = os.path.join(root,"image")
+		img_path = os.path.join(root,"image") if mode != 'predict' else self.root
 		# self.GT_paths = root[:-1]+'_GT/'
 		self.GT_paths = os.path.join(root,"mask")
 		# self.image_paths = list(map(lambda x: os.path.join(root, x), os.listdir(root)))
@@ -52,14 +51,16 @@ class ImageFolder(data.Dataset):
 		torch.manual_seed(seed)
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
-		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + 'mask.png')
+		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + 'mask.png') if self.mode != 'predict' else None
+
+	
 		to_tensor = T.Compose([
 			T.ToTensor(),
 		])
 		trans = A.Compose([
 			A.Rotate(limit=(-15,15),p=self.augmentation_prob),
 			A.Affine(p=self.augmentation_prob, scale=(0.9, 1.2)),
-			A.VerticalFlip(p=self.augmentation_prob), # Possibility to cause problems with the rectum and bladder
+			# A.VerticalFlip(p=self.augmentation_prob), # Possibility to cause problems with the rectum and bladder
 		])
 		# This transform is only used for the MRI
 		affine = tio.Compose([
@@ -86,13 +87,22 @@ class ImageFolder(data.Dataset):
 		image_file = dicom.dcmread(image_path)
 		image = image_file.pixel_array
 		image = limiting_filter(image,threshold=10,display=False)
-		GT = cv.imread(GT_path, cv.IMREAD_GRAYSCALE)
 		image = image/np.max(image)
 		# Check the min max normalization 
-		# image = (image-np.min(image))/(np.max(image)-np.min(image))
 		image = image.astype(np.float32)
 		# Resize keeping the same geometry
 		image = crop_and_pad(image,self.image_size,display=False)
+		if self.mode =='predict':
+			(h, w) = image.shape[:2]
+			(cX, cY) = (w // 2, h // 2)
+			M = cv.getRotationMatrix2D((cX, cY), 25, 1.0)
+			rotated_1 = cv.warpAffine(image, M, (w, h))
+			M = cv.getRotationMatrix2D((cX, cY), -25, 1.0)
+			rotated_2 = cv.warpAffine(image, M, (w, h))
+			flipped = cv.flip(image, 0)
+			return to_tensor(image),to_tensor(rotated_1),to_tensor(rotated_2),to_tensor(flipped)
+
+		GT = cv.imread(GT_path, cv.IMREAD_GRAYSCALE)
 		GT =crop_and_pad(GT, self.image_size)
 
 		if not self.is_multiorgan:
@@ -101,8 +111,6 @@ class ImageFolder(data.Dataset):
 			GT = GT.astype(np.float32)	
 		else:
 			GT = self.mask_to_class(GT)
-
-		# if self.mode == "test":
 		
 
 		
@@ -120,15 +128,10 @@ class ImageFolder(data.Dataset):
 			# GT = np.expand_dims(augmented["mask"], axis=0)
 			# image = to_tensor(image.squeeze(axis=-1)).permute(1,2,0)
 			# GT = to_tensor(GT.squeeze(axis=-1)).permute(1,2,0)
-
-		if self.slave:
-			sl = affine(np.expand_dims(augmented["image"], axis=0))
-			sl = to_tensor(sl.squeeze(axis=-1)).permute(1,2,0)
-			return [sl,image], GT.type(torch.long)
 	
-		else:
-			image = to_tensor(image)
-			GT = to_tensor(GT)
+		# else:
+		image = to_tensor(image)
+		GT = to_tensor(GT)
 		
 		
 				
@@ -138,13 +141,12 @@ class ImageFolder(data.Dataset):
 		"""Returns the total number of font files."""
 		return len(self.image_paths)
 
-def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',is_multiorgan=True, augmentation_prob=0.4, classes = None, slave= False):
+def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',is_multiorgan=True, augmentation_prob=0.4, classes = None, shuffle = True):
 	"""Builds and returns Dataloader."""
-	print("Slave: {}". format(slave))
-	dataset = ImageFolder(root = image_path, image_size =image_size, mode=mode,augmentation_prob=augmentation_prob, is_multiorgan=is_multiorgan, classes=classes,slave = slave)
+	dataset = ImageFolder(root = image_path, image_size =image_size, mode=mode,augmentation_prob=augmentation_prob, is_multiorgan=is_multiorgan, classes=classes)
 	data_loader = data.DataLoader(dataset=dataset,
 								  batch_size=batch_size,
-								  shuffle=True,
+								  shuffle=shuffle,
 								  num_workers=num_workers
 								  )
 	return data_loader
@@ -153,12 +155,11 @@ def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',i
 # import matplotlib.pyplot as plt 
 # path='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train'
 # classes = {255: 1, 127: 2, 85: 3, 63: 4}
-# dataload = get_loader(path,256,1,is_multiorgan=True,mode="test",classes =classes, slave=False)
+# dataload = get_loader(path,256,1,is_multiorgan=True,mode="test",classes =classes)
 
 # # image,mask = dataload.__getitem__(55)
 # for (image,mask) in dataload:
 # 	# transforms = T.Compose([T.ToPILImage()])
-# 	# slave = image[0].data.cpu().detach().numpy().squeeze()
 # 	image = image.data.cpu().detach().numpy().squeeze()
 
 # 	mask = mask.data.cpu().detach().numpy().squeeze()

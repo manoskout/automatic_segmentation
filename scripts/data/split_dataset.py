@@ -31,8 +31,8 @@ def get_file_names(filenames, train, val, test):
     return train_names, val_names, test_names
 if __name__ == "__main__":
     np.random.seed(42)
-    root_dir = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass" # data root path
-    val_ratio = 0.2
+    root_dir = "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_not_4" # data root path
+    val_ratio = 0.1
     test_ratio = 0.2
     # for cls in classes_dir:
     # Check about the classes
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     mask_filenames = os.listdir(mask_path)
     img_filenames = os.listdir(img_path)
     patient_numbers = list(set([patient[0:3] for patient in img_filenames]))
-    print(patient_numbers)
+    # print(len(patient_numbers))
     patients_train, patients_val, patients_test = splitting(patient_numbers, val_ratio, test_ratio)
 
     # img_filenames,mask_filenames=both_shuffling(img_filenames,mask_filenames, image_type=".dcm",mask_type=".tiff")
@@ -64,9 +64,9 @@ if __name__ == "__main__":
     print('Training: ', len(mask_train))
     print('Validation: ', len(mask_val))
     print('Testing: ', len(mask_test))
-    # augment_data(img_train, mask_train, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train", output_type="numpy", augment=False)
-    # augment_data(img_test, mask_test, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\test", output_type="numpy", augment=False)
-    # augment_data(img_val, mask_val, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\validation", output_type="numpy", augment=False)
+    augment_data(img_train, mask_train, img_path, mask_path, "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass\\train", output_type="numpy", augment=False)
+    augment_data(img_test, mask_test, img_path, mask_path, "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass\\test", output_type="numpy", augment=False)
+    augment_data(img_val, mask_val, img_path, mask_path, "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass\\validation", output_type="numpy", augment=False)
 
     # print("---------------------------------------------------------------------------------")
     # print("After augmentation..")
