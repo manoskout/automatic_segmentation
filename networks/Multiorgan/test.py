@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils_metrics import AverageMeter
 # Fix memory problem
 torch.cuda.empty_cache()
-from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
+from networks.network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 import csv
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
@@ -15,94 +15,9 @@ import argparse
 from loaders.data_loader import get_loader
 import segmentation_models_pytorch as smp
 import matplotlib.pyplot as plt
+from utils import classes_to_mask, class_mapping, build_model, save_validation_results
 
 
-def class_mapping(classes):
-	""" Maps the classes according to the pixel are shown into the mask
-	"""
-	mapping_dict={}
-	for index,i in enumerate(classes):
-		
-		if index == 0:
-			mapping_dict[0]= index
-		else:
-			mapping_dict[int(255/index)]= index
-	return mapping_dict
-
-def build_model(cfg, device):
-    """Build generator and discriminator."""
-    if cfg.smp:
-        if cfg.model_type == "DeepLabV3+":
-            unet = smp.DeepLabV3Plus(
-                encoder_name=cfg.encoder_name,        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-                encoder_weights=cfg.encoder_weights,     # use `imagenet` pre-trained weights for encoder initialization
-                in_channels=cfg.img_ch,        # model input channels (1 for gray-scale images, 3 for RGB, etc.)
-                classes=cfg.output_ch,         # model output channels (number of classes in your dataset)
-            )
-        elif cfg.model_type == "U_Net":
-            unet = smp.Unet(
-                encoder_name=cfg.encoder_name,       
-                encoder_weights=cfg.encoder_weights,    
-                in_channels=cfg.img_ch,       
-                classes=cfg.output_ch,         
-            )
-        elif cfg.model_type == "U_Net_plus":
-            unet = smp.UnetPlusPlus(
-                encoder_name=cfg.encoder_name,        
-                encoder_weights=cfg.encoder_weights,    
-                in_channels=cfg.img_ch,       
-                classes=cfg.output_ch,         
-            )
-    elif cfg.model_type =='U_Net':
-        unet = U_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch)
-    elif cfg.model_type =='R2U_Net':
-        unet = R2U_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch,t=cfg.t)
-    elif cfg.model_type =='AttU_Net':
-        unet = AttU_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch)
-    elif cfg.model_type == 'R2AttU_Net':
-        unet = R2AttU_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch,t=cfg.t)
-        
-    unet.to(device)
-
-    return unet
-def classes_to_mask(cfg: argparse.Namespace, mask : torch.Tensor) -> torch.Tensor:
-    """Converts the labeled pixels to range 0-255
-    """
-    for index, k in enumerate(cfg.classes):
-        # prin0t(index,"ind : ",int(255/index)) if index != 0 else print(index,"ind : ","0")
-        mask[mask==index] = int(255/index) if index != 0 else 0
-
-
-    return mask.type(torch.float)
-def save_validation_results(cfg,image, pred_mask, true_mask,epoch):
-    if len(cfg.classes)>1:
-        pred_mask = torch.argmax(pred_mask,dim=1)
-        pred_mask = classes_to_mask(cfg,pred_mask)
-        true_mask[0] = classes_to_mask(cfg, true_mask[0])
-        true_mask = true_mask.to(torch.float32)
-    image = image.data.cpu()
-    pred_mask = pred_mask.data.cpu()
-    true_mask = true_mask.data.cpu()
-    fig, ax = plt.subplots(1,1)
-    pred_mask = pred_mask.squeeze()
-    true_mask = true_mask.squeeze()
-    pred_mask = np.ma.masked_where(pred_mask == 0, pred_mask)
-    true_mask = np.ma.masked_where(true_mask == 0, true_mask)
-    plt.rcParams["figure.figsize"] = [7.00, 3.50]
-    plt.rcParams["figure.autolayout"] = True
-    ax.imshow(image.squeeze(),cmap="gray",interpolation='none')
-    ax.imshow(true_mask,cmap="hot",interpolation='none', alpha = 0.8)
-    ax.imshow(pred_mask,cmap="jet",interpolation='none', alpha = 0.5)
-    ax.axes.xaxis.set_visible(False)
-    ax.axes.yaxis.set_visible(False)
-    plt.savefig(os.path.join(
-            cfg.result_path,
-            '%s_test_%d_result_INPUT.png'%(cfg.model_type,epoch+1)
-            )
-    )
-    # plt.grid(False)
-    # plt.show()
-    
 
 def _update_metricRecords(tens_writer,csv_writer,mode,metric, classes=None, step=None) -> None:	
     avg_metrics = [
@@ -205,7 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\test')
     parser.add_argument('--result_path', type=str, default='')
 
-    parser.add_argument('--cuda_idx', type=int, default=1)
+    parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")

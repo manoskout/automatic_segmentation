@@ -1,57 +1,128 @@
 import os
+from re import L
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import torch
 # Fix memory problem
 torch.cuda.empty_cache()
-import torchvision
-from torch import optim
-from utils_metrics import DiceBCELoss, collection #, collect_metrics
-from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
+from networks.network import *
 import csv
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import argparse
 from loaders.data_loader import get_loader
+from Multiorgan.utils import build_model, classes_to_mask
+# from Multiorgan.rt_stuct_generator import RT_Struct
+import matplotlib.pyplot as plt 
+import cv2
+import imutils
 
-def build_model(cfg, device):
-    """Build generator and discriminator."""
-    if cfg.model_type =='U_Net':
-        unet = U_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch)
-    elif cfg.model_type =='R2U_Net':
-        unet = R2U_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch,t=cfg.t)
-    elif cfg.model_type =='AttU_Net':
-        unet = AttU_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch)
-    elif cfg.model_type == 'R2AttU_Net':
-        unet = R2AttU_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch,t=cfg.t)
-        
-    unet.to(device)
+# def vessie_correction(img):
+def post_processing(cfg,pred_image, classes):
+    print(classes)
+    print(pred_image.shape)
+    print(pred_image.squeeze().shape)
+    rectum_area=0
+    vessie_area= 0
+    femoral_g_area = 0
+    femoral_d_area = 0
 
-    return unet
 
-def save_validation_results(cfg,image, pred_mask,epoch):
-    image = image.data.cpu()
+    for index,(cl,segmented_class) in enumerate(zip(classes,pred_image.squeeze())):
+        # segmented_class = torch.softmax(segmented_class,dim=1)
+        # if cl == "VESSIE":
+            # segmented_class= vessie_correction(segmented_class)
+            # segmented_class[int(cfg.image_size/2):,]
+        fig,ax = plt.subplots(1,1)
+        ax.set_title(cl)
+        seg = segmented_class.data.cpu()
+        # print(seg)
+        ax.imshow(seg, cmap="gray")
+        plt.show()
+    return pred_image
+def save_validation_results(cfg,image, pred_mask,pred_mask_1,pred_mask_2,pred_mask_3,counter = 0 ):
+    # slices= np.arange(4,70,1)
+    # if len(cfg.classes)>1:
+    #     pred_mask = torch.softmax(pred_mask,dim=1)
+    #     pred_mask_1 = torch.softmax(pred_mask_1, dim=1)
+    #     pred_mask_2 = torch.softmax(pred_mask_2, dim=1)
+    #     if counter in slices:
+    #         torch.save(pred_mask, os.path.join(cfg.result_path,f"test_{counter}.pt"))
+    #         torch.save(image, os.path.join(cfg.result_path,f"img_test_{counter}.pt"))
+
+    #         return
+        # pred_mask = post_processing(cfg,pred_mask, cfg.classes)
+
+        # print(pred_mask.shape)
+    image = image[0].data.cpu()
+    image = image.squeeze()
+    pred_mask = torch.argmax(pred_mask,dim=1)
+    pred_mask_1 = torch.argmax(pred_mask_1,dim=1)
+    pred_mask_2 = torch.argmax(pred_mask_2,dim=1)
+    pred_mask_3 = torch.argmax(pred_mask_3,dim=1)
+
+
+    pred_mask = classes_to_mask(cfg,pred_mask)
+    pred_mask_1 = classes_to_mask(cfg,pred_mask_1)
+    pred_mask_2 = classes_to_mask(cfg,pred_mask_2)
+    pred_mask_3 = classes_to_mask(cfg,pred_mask_3)
+
     pred_mask = pred_mask.data.cpu()
-    torchvision.utils.save_image(
-        image,
-        os.path.join(
-            cfg.result_path,
-            '%s_%d_result_INPUT.png'%(cfg.model_type,epoch+1
-            )
-        )
-    )
-    torchvision.utils.save_image(
-        pred_mask,
-        os.path.join(
-            cfg.result_path,
-            '%s_%d_result_PRED.png'%(cfg.model_type,epoch+1
-            )
-        )
-    )
+    pred_mask_1 = pred_mask_1.data.cpu()
+    pred_mask_2 = pred_mask_2.data.cpu()
+    pred_mask_3 = pred_mask_3.data.cpu()
+
+    pred_mask = pred_mask.squeeze().numpy()
+    pred_mask_1 = pred_mask_1.squeeze().numpy()
+    pred_mask_2 = pred_mask_2.squeeze().numpy()
+    pred_mask_3 = pred_mask_3.squeeze().numpy()
+
+
+    (h, w) = image.shape[:2]
+    (cX, cY) = (w // 2, h // 2)
+    M = cv2.getRotationMatrix2D((cX, cY), -25, 1.0)
+    pred_mask_1 = cv2.warpAffine(pred_mask_1, M, (w, h))
+    M = cv2.getRotationMatrix2D((cX, cY), 25, 1.0)
+    pred_mask_2 = cv2.warpAffine(pred_mask_2, M, (w, h))
+    pred_mask_3 = cv2.flip(pred_mask_3, 0)
+
+    pred_mask = np.ma.masked_where(pred_mask == 0, pred_mask)
+    pred_mask_1 = np.ma.masked_where(pred_mask_1 == 0, pred_mask_1)
+    pred_mask_2 = np.ma.masked_where(pred_mask_2 == 0, pred_mask_2)
+    pred_mask_3 = np.ma.masked_where(pred_mask_3 == 0, pred_mask_3)
+    
+    
+    fig, (ax1,ax2,ax3,ax4) = plt.subplots(1,4)
+
+    plt.rcParams["figure.figsize"] = [7.00, 3.50]
+    plt.rcParams["figure.autolayout"] = True
+    ax1.imshow(image,cmap="gray",interpolation='none')
+    ax1.imshow(pred_mask,cmap="jet",interpolation='none', alpha = 0.5)
+    ax1.axes.xaxis.set_visible(False)
+    ax1.axes.yaxis.set_visible(False)
+
+    ax2.imshow(image,cmap="gray",interpolation='none')
+    ax2.imshow(pred_mask_1,cmap="jet",interpolation='none', alpha = 0.5)
+    ax2.axes.xaxis.set_visible(False)
+    ax2.axes.yaxis.set_visible(False)
+
+    ax3.imshow(image,cmap="gray",interpolation='none')
+    ax3.imshow(pred_mask_2,cmap="jet",interpolation='none', alpha = 0.5)
+    ax3.axes.xaxis.set_visible(False)
+    ax3.axes.yaxis.set_visible(False)
+
+    ax4.imshow(image,cmap="gray",interpolation='none')
+    ax4.imshow(pred_mask_3,cmap="jet",interpolation='none', alpha = 0.5)
+    ax4.axes.xaxis.set_visible(False)
+    ax4.axes.yaxis.set_visible(False)
+    plt.show()
+
 
 #===================================== Test ====================================#
-def test(cfg, unet_path,test_loader, test_save_path, device ="cuda"):
-    print(unet_path)
-    unet = build_model(cfg,device)
+def test(cfg, unet_path,test_loader):
+    unet = build_model(cfg)
     if os.path.isfile(unet_path):
         # Load the pretrained Encoder
         unet.load_state_dict(torch.load(unet_path))
@@ -59,44 +130,61 @@ def test(cfg, unet_path,test_loader, test_save_path, device ="cuda"):
     unet.eval()
     test_len = len(test_loader)
     length = 0
-    dice_c = iou = 0.	
+    results = [] 
     for images in tqdm(
 			test_loader, 
 			total = test_len, 
 			desc="Predict Round", 
 			unit="batch", 
 			leave=False):
-        images = images.to(device)
+        image = images[0].to(cfg.device)
+        image_1 = images[1].to(cfg.device)
+        image_2 = images[2].to(cfg.device)
+        image_3 = images[3].to(cfg.device)
+
+
         length+=1
         with torch.no_grad():
-            pred_masks = unet(images)
-        
-        save_validation_results(cfg,images, pred_masks,test_len-length)
 
+            pred_mask=unet(image)
+            pred_mask_1=unet(image_1)
+            pred_mask_2=unet(image_2)
+            pred_mask_3=unet(image_3)
 
+        save_validation_results(cfg,images, pred_mask,pred_mask_1,pred_mask_2,pred_mask_3,length)
+
+    return pred_mask
+
+# rt_struct = RT_Struct(pred_masks)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    
+        
     # model hyper-parameters
-    parser.add_argument('--image_size', type=int, default=320)
+    parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--t', type=int, default=3, help='t for Recurrent step of R2U_Net or R2AttU_Net')  
     # training hyper-parameters
     parser.add_argument('--img_ch', type=int, default=1)
-    parser.add_argument('--output_ch', type=int, default=1)
+    parser.add_argument('--output_ch', type=int, default=5)
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--num_workers', type=int, default=4)
     # misc
     parser.add_argument('--mode', type=str, default='predict')
-    parser.add_argument('--model_name', type=str, default='U_Net-80-0.0004-52.pkl')
-    parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    parser.add_argument('--model_path', type=str, default='.\\models')
-    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\003_PRO_pCT_CGFL\\MRI_003_PRO_pCT_CGFL')
-    parser.add_argument('--result_path', type=str, default='./result/')
+    parser.add_argument('--model_name', type=str, default='checkpoint.pkl')
+    parser.add_argument('--model_type', type=str, default='AttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
+    parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\ResAttU_Net\\19_3_multiclass_200_4_focal')
+    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\Dataset_Backup\\PRO_pCT_CGFL\\028_PRO_pCT_CGFL_ok\\test')
+    parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\predict')
 
-    parser.add_argument('--cuda_idx', type=int, default=1)
+    parser.add_argument('--device', type=str, default="cuda")
+    parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
+    parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
+    parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
+    parser.add_argument("--smp", action="store_true", help="Use smp_library")
+
 
     config = parser.parse_args()
+    config.dropout = 0
     unet_path = os.path.join(
 			config.model_path, config.model_name
 			)
@@ -104,7 +192,8 @@ if __name__ == '__main__':
                         image_size=config.image_size,
                         batch_size=config.batch_size,
                         num_workers=config.num_workers,
-                        mode='predict')
-                        
-    device = "cuda"
-    test(config,unet_path,test_loader, config.result_path, device)
+                        mode='predict',
+                        shuffle=False)
+
+    print(config)
+    test(config,unet_path,test_loader)
