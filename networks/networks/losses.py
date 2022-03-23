@@ -163,52 +163,61 @@ def soft_tversky_score(
     tversky_score = (intersection + smooth) / (intersection + alpha * fp + beta * fn + smooth).clamp_min(eps)
     return tversky_score
 
+class DualFocalloss(torch.nn.Module):
+    '''
+    This loss is proposed in this paper: https://arxiv.org/abs/1909.11932
+    It does not work in my projects, hope it will work well in your projects.
+    Hope you can correct me if there are any mistakes in the implementation.
+    '''
 
-class TverskyLoss(DiceLoss):
-    """Tversky loss for image segmentation task.
-    Where TP and FP is weighted by alpha and beta params.
-    With alpha == beta == 0.5, this loss becomes equal DiceLoss.
-    It supports binary, multiclass and multilabel cases
+    def __init__(self, ignore_lb=255, eps=1e-5, reduction='mean'):
+        super(DualFocalloss, self).__init__()
+        self.ignore_lb = ignore_lb
+        self.eps = eps
+        self.reduction = reduction
+        self.mse = torch.nn.MSELoss(reduction='none')
 
-    Args:
-        mode: Metric mode {'binary', 'multiclass', 'multilabel'}
-        classes: Optional list of classes that contribute in loss computation;
-        By default, all channels are included.
-        log_loss: If True, loss computed as ``-log(tversky)`` otherwise ``1 - tversky``
-        from_logits: If True assumes input is raw logits
-        smooth:
-        ignore_index: Label that indicates ignored pixels (does not contribute to loss)
-        eps: Small epsilon for numerical stability
-        alpha: Weight constant that penalize model for FPs (False Positives)
-        beta: Weight constant that penalize model for FNs (False Positives)
-        gamma: Constant that squares the error function. Defaults to ``1.0``
+    def forward(self, logits, label):
+        ignore = label.data.cpu() == self.ignore_lb
+        n_valid = (ignore == 0).sum()
+        label = label.clone()
+        label[ignore] = 0
+        lb_one_hot = logits.data.clone().zero_().scatter_(1, label.unsqueeze(1), 1).detach()
 
-    Return:
-        loss: torch.Tensor
+        pred = torch.softmax(logits, dim=1)
+        loss = -torch.log(self.eps + 1. - self.mse(pred, lb_one_hot)).sum(dim=1)
+        loss[ignore] = 0
+        if self.reduction == 'mean':
+            loss = loss.sum() / n_valid
+        elif self.reduction == 'sum':
+            loss = loss.sum()
+        elif self.reduction == 'none':
+            loss = loss
+        return loss
 
-    """
+class FocalTverskyLoss(torch.nn.Module):
+    def __init__(self, weight=None, size_average=True, alpha=0.7, beta= 0.3, gamma= 3):
+        super(FocalTverskyLoss, self).__init__()
+        self.alpha=alpha
+        self.beta=beta
+        self.gamma=gamma
 
-    def __init__(
-        self,
-        mode: str,
-        classes: List[int] = None,
-        log_loss: bool = False,
-        from_logits: bool = True,
-        smooth: float = 0.0,
-        ignore_index: Optional[int] = None,
-        eps: float = 1e-7,
-        alpha: float = 0.7,
-        beta: float = 0.3,
-        gamma: float = 0.75,
-    ):
-
-        super().__init__(mode, classes, log_loss, from_logits, smooth, ignore_index, eps)
-        self.alpha = alpha
-        self.beta = beta
-        self.gamma = gamma
-
-    def aggregate_loss(self, loss):
-        return loss.mean() ** self.gamma
-
-    def compute_score(self, output, target, smooth=0.0, eps=1e-7, dims=None) -> torch.Tensor:
-        return soft_tversky_score(output, target, self.alpha, self.beta, smooth, eps, dims)
+    def forward(self, inputs, targets, smooth=1e-7):
+        
+        #comment out if your model contains a sigmoid or equivalent activation layer
+        inputs = F.sigmoid(inputs)       
+        
+        #flatten label and prediction tensors
+        inputs = inputs.view(-1)
+        targets = targets.view(-1)
+        
+        #True Positives, False Positives & False Negatives
+        TP = (inputs * targets).sum()    
+        FP = ((1-targets) * inputs).sum()
+        FN = (targets * (1-inputs)).sum()
+        
+        Tversky = (TP + smooth) / (TP + self.alpha*FP + self.beta*FN + smooth)  
+        FocalTversky = (1 - Tversky)**self.gamma
+                       
+        return FocalTversky
+    

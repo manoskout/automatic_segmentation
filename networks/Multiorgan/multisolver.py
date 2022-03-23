@@ -8,8 +8,7 @@ import torchvision
 from torch import optim
 from utils_metrics import AverageMeter, EarlyStopping
 import segmentation_models_pytorch as smp 
-from segmentation_models_pytorch.losses import FocalLoss
-from networks.losses import DiceLoss, TverskyLoss
+from networks.losses import DiceLoss, FocalTverskyLoss, DualFocalloss
 # from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
 from networks.network import U_Net,R2U_Net,AttU_Net,R2AttU_Net,ResAttU_Net
 import csv
@@ -22,8 +21,8 @@ from sklearn.model_selection import KFold
 
 class MultiSolver(object):
 	def __init__(
-		self, config: argparse.Namespace, train_loader: data.DataLoader,  
-		classes: list, save_images: bool= True,) -> None:
+		self, config: argparse.Namespace, train_loader: data.DataLoader, valid_loader: data.DataLoader, 
+		classes: dict, save_images: bool= True,) -> None:
 		# K_fold Cross validation
 
 		self.k_folds = config.k_folds
@@ -31,11 +30,11 @@ class MultiSolver(object):
 		self.model_path = config.model_path
 		self.result_path = config.result_path
 		self.mode = config.mode
-
+		self.log_dir = config.log_dir
 		# Data loader
 
 		self.train_loader = train_loader
-		# self.valid_loader = valid_loader
+		self.valid_loader = valid_loader
 		if config.type == "multiclass":
 			self.classes = classes
 			del self.classes[0] # Delete the background label
@@ -52,7 +51,7 @@ class MultiSolver(object):
 		self.early_patience = config.early_stopping
 		# Using this loss we dont have to perform one_hot is already implemented inside the function
 		# self.criterion = torch.nn.CrossEntropyLoss()
-		self.criterion = TverskyLoss(mode=config.type)  
+		self.criterion = DualFocalloss()  
 		self.smp_enabled = config.smp
 		self.encoder_name = config.encoder_name
 		self.encoder_weights=config.encoder_weights		  
@@ -98,15 +97,18 @@ class MultiSolver(object):
 			true_mask[0] = self.classes_to_mask(true_mask[0])
 			true_mask = true_mask.to(torch.float32)
 		image = image.data.cpu()
-		pred_mask = pred_mask.data.cpu()
+		print(pred_mask.shape)
+		pred_mask = pred_mask.data.cpu().squeeze()
+		print(pred_mask.shape)
+
 		true_mask = true_mask.data.cpu()
-		pred_mask.unsqueeze(1)
+
 
 		torchvision.utils.save_image(
 			image,
 			os.path.join(
 				self.result_path,
-				'%s_valid_%d_result_INPUT.jpg'%(self.model_type,epoch+1
+				'%s_valid_%d_result_INPUT.png'%(self.model_type,epoch+1
 				)
 			)
 		)
@@ -114,7 +116,7 @@ class MultiSolver(object):
 			pred_mask,
 			os.path.join(
 				self.result_path,
-				'%s_valid_%d_result_PRED.jpg'%(self.model_type,epoch+1
+				'%s_valid_%d_result_PRED.png'%(self.model_type,epoch+1
 				)
 			)
 		)
@@ -122,7 +124,7 @@ class MultiSolver(object):
 			true_mask,
 			os.path.join(
 				self.result_path,
-				'%s_valid_%d_result_GT.jpg'%(self.model_type,epoch+1
+				'%s_valid_%d_result_GT.png'%(self.model_type,epoch+1
 				)
 			)
 		)
@@ -181,6 +183,7 @@ class MultiSolver(object):
 			with torch.no_grad():		
 				pred_mask = self.unet(image)
 				if self.output_ch > 1:
+					# print(true_mask.shape,pred_mask.shape)
 					loss = self.criterion(pred_mask,true_mask[:,0,:,:])
 
 				else:

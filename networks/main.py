@@ -25,13 +25,13 @@ def class_mapping(classes):
 
 def main(config):
     print(config.result_path)
-    # cudnn.benchmark = True
-    # if config.model_type not in ['U_Net_plus','U_Net','DeepLabV3','ResAttU_Net','DeepLabV3+','R2U_Net','AttU_Net','R2AttU_Net']:
-    #     print('ERROR! Choose the right model')
-    #     return
+    cudnn.benchmark = True
+    if config.model_type not in ['U_Net_plus','U_Net','DeepLabV3','ResAttU_Net','DeepLabV3+','R2U_Net','AttU_Net','R2AttU_Net']:
+        print('ERROR! Choose the right model')
+        return
     
-    # if not os.path.exists(config.result_path):
-    #     os.makedirs(config.result_path)
+    if not os.path.exists(config.result_path):
+        os.makedirs(config.result_path)
     
 
     lr = config.lr 
@@ -77,7 +77,8 @@ def main(config):
                 num_workers=config.num_workers,
                 shuffle = False,
                 sampler = valid_subsampler)
-            solver = Solver(config, train_loader, valid_loader, None) if config.type == "binary" else MultiSolver(config, train_loader, valid_loader, classes=classes, save_images=False)
+            # Solver(config, train_loader, valid_loader, None) if config.type == "binary" else 
+            solver = MultiSolver(config, train_loader, valid_loader, classes, False)
             print("K-Fold cross validation. Current fold: {}".format(fold))
             solver.train_model(fold)
 
