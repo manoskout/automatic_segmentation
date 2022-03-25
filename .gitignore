@@ -3,7 +3,10 @@ Test/
 networks/result
 networks/models
 networks/runs
+networks/prev_runs
 networks/plot_transforms.py
 notebooks/
 __pycache__/
 networks/Multiorgan/runs
+networks/Multiorgan/runs
+networks/Multiorgan/prev_runs

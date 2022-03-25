@@ -249,7 +249,7 @@ class MaskBuilder:
     for num, (index,case) in enumerate(self.mask_data.items(),1):
       # print(num)
       mask= case["mask"] if "mask" in case.keys() and self.rt_struct else None
-      if mask is not None and len(np.unique(mask))==len(self.OARS)+1: # +1 is because se background
+      if mask is not None:# and len(np.unique(mask))==len(self.OARS)+1: # +1 is because se background
         split_counter += 1
         mask = sum(mask) if mask is not None else None
         mask = np.where(mask==0, mask, 255/mask).astype(np.uint8) if mask is not None else None

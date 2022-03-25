@@ -172,7 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('--mode', type=str, default='predict')
     parser.add_argument('--model_name', type=str, default='ResAttU_Net-200-0.0010-15_0.pkl')
     parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\ResAttU_Net\\22_3_multiclass_200_4_dual_focal')
+    parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\ResAttU_Net\\24_3_multiclass_200_4')
     parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_not_4\\test')
     parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\predict')
 
