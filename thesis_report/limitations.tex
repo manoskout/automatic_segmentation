@@ -8,15 +8,43 @@ For instance, for segmentation of pelvic region, rectum and bladder
 are often different size or position from the femoral heads.
 Hence, training a network with class imbalanced data is causing 
 unstable segmentation model, which is biases towards the classes 
-of different organs. To alleviate this problem, a right use of loss 
+of different organs. The consequence of class-imbalance is listed below:
+\begin{itemize}
+        \item No learning due to easy negatives
+        \begin{abstract}
+                There will be no improvent to the model's performance due to that the model already did decent job overall.
+                In this way, the training process of the model becomes inefficient due to the fact that most of the locations 
+                in the image are easy negatives, thus contribute no useful learning.
+        \end{abstract}
+        \item Cumulative effect of many easy negatives
+        \begin{abstract}
+                When small losses from such easy negative classified classes are summed over many image,
+                it exagerates the overall total loss, emphasizing to degenerated models. This tends to shift the model on 
+                focusing only on classifiyng negative examples correctly.
+        \end{abstract}
+\end{itemize}
+
+To alleviate this problem, a right use of loss 
 functions is crucial for these tasks.
 
 Proposed loss functions that tackle this problem
 \begin{itemize}
         \item Combo loss
         \item Focal Tversky loss
-        \item 
 \end{itemize}
+All the afforementioned loss functions, are a combination of Focal Loss function. 
+Focal loss is an improved loss function that solves a 2-fold problem. 
+Firstly, Focal loss gives a balance between easy and hard examples. Secondly, it gives balance between positive and negative examples.
+Simply put, the loss function should be able to downweight the easy examples and focus on complex ones.
+
+\begin{equation}
+        FL(p_{t})= -(1-p_{t})^\gamma*\log (p_{t}).
+\end{equation}
+
+
+
+
+
 
 \section{Over-fitting}
 Another crucial challenge in multi-organ segmentation is data scarcity. In other words, 
