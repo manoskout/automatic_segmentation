@@ -24,11 +24,8 @@ class ImageFolder(data.Dataset):
 		self.is_multiorgan = is_multiorgan
 		self.classes = classes
 		self.augmentation_prob = augmentation_prob
-		# GT : Ground Truth
-		img_path = os.path.join(root,"image") if mode != 'predict' else self.root
-		# self.GT_paths = root[:-1]+'_GT/'
+		img_path = os.path.join(root,"image") 
 		self.GT_paths = os.path.join(root,"mask")
-		# self.image_paths = list(map(lambda x: os.path.join(root, x), os.listdir(root)))
 		self.image_paths = list(
 			map(
 				lambda x: os.path.join(img_path,x),
@@ -63,23 +60,23 @@ class ImageFolder(data.Dataset):
 			# A.VerticalFlip(p=self.augmentation_prob), # Possibility to cause problems with the rectum and bladder
 		])
 		# This transform is only used for the MRI
-		affine = tio.Compose([
-			tio.RandomAffine(
-				p=self.augmentation_prob,
-				scales=(0.9, 1.2),
+		# affine = tio.Compose([
+		# 	tio.RandomAffine(
+		# 		p=self.augmentation_prob,
+		# 		scales=(0.9, 1.2),
 
-    			degrees=5,
-			)
-		])
-		random_bias = tio.Compose([
-			## Make the training set hard and there is a huge different between the training loss and validation loss
-			# tio.RandomElasticDeformation(   
-			# 	num_control_points=7,  # or just 7
-    		# 	locked_borders=2,),
+    	# 		degrees=5,
+		# 	)
+		# ])
+		# random_bias = tio.Compose([
+		# 	## Make the training set hard and there is a huge different between the training loss and validation loss
+		# 	# tio.RandomElasticDeformation(   
+		# 	# 	num_control_points=7,  # or just 7
+    	# 	# 	locked_borders=2,),
 			
-			tio.RandomBiasField(p=self.augmentation_prob),
+		# 	tio.RandomBiasField(p=self.augmentation_prob),
 			
-		])
+		# ])
 
 
 
@@ -93,15 +90,9 @@ class ImageFolder(data.Dataset):
 		# Resize keeping the same geometry
 		image = crop_and_pad(image,self.image_size,display=False)
 		if self.mode =='predict':
-			(h, w) = image.shape[:2]
-			(cX, cY) = (w // 2, h // 2)
-			M = cv.getRotationMatrix2D((cX, cY), 25, 1.0)
-			rotated_1 = cv.warpAffine(image, M, (w, h))
-			M = cv.getRotationMatrix2D((cX, cY), -25, 1.0)
-			rotated_2 = cv.warpAffine(image, M, (w, h))
-			flipped = cv.flip(image, 0)
-			return to_tensor(image),to_tensor(rotated_1),to_tensor(rotated_2),to_tensor(flipped)
-
+			# image = np.expand_dims(image, axis=-1)
+			return to_tensor(image)
+			
 		GT = cv.imread(GT_path, cv.IMREAD_GRAYSCALE)
 		GT =crop_and_pad(GT, self.image_size)
 

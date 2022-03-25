@@ -7,8 +7,7 @@ from torch.nn.modules.loss import _Loss
 def soft_dice_score(
     output: torch.Tensor,
     target: torch.Tensor,
-    smooth: float = 0.0,
-    eps: float = 1e-7,
+    smooth: float = 1e-7,
     dims=None,
 ) -> torch.Tensor:
     assert output.size() == target.size()
@@ -18,7 +17,7 @@ def soft_dice_score(
     else:
         intersection = torch.sum(output * target)
         cardinality = torch.sum(output + target)
-    dice_score = (2.0 * intersection + smooth) / (cardinality + smooth).clamp_min(eps)
+    dice_score = (2.0 * intersection + smooth) / (cardinality + smooth)
     return dice_score
 
 class DiceLoss(_Loss):
@@ -28,9 +27,8 @@ class DiceLoss(_Loss):
         classes: Optional[List[int]] = None,
         log_loss: bool = False,
         from_logits: bool = True,
-        smooth: float = 0.0,
+        smooth: float = 1e-7,
         ignore_index: Optional[int] = None,
-        eps: float = 1e-7,
     ):
         """Dice loss for image segmentation task.
         It supports binary, multiclass and multilabel cases
@@ -41,8 +39,6 @@ class DiceLoss(_Loss):
             from_logits: If True, assumes input is raw logits
             smooth: Smoothness constant for dice coefficient (a)
             ignore_index: Label that indicates ignored pixels (does not contribute to loss)
-            eps: A small epsilon for numerical stability to avoid zero division error
-                (denominator will be always greater or equal to eps)
         Shape
              - **y_pred** - torch.Tensor of shape (N, C, H, W)
              - **y_true** - torch.Tensor of shape (N, H, W) or (N, C, H, W)
@@ -57,15 +53,12 @@ class DiceLoss(_Loss):
         self.classes = classes
         self.from_logits = from_logits
         self.smooth = smooth
-        self.eps = eps
         self.log_loss = log_loss
         self.ignore_index = ignore_index
 
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
 
         assert y_true.size(0) == y_pred.size(0)
-        # y_true = y_tr.clone()
-        # y_pred = y_pr.clone()
         if self.from_logits:
             # Apply activations to get [0..1] class probabilities
             # Using Log-Exp as this gives more numerically stable result and does not cause vanishing gradient on
@@ -112,11 +105,11 @@ class DiceLoss(_Loss):
                 mask = y_true != self.ignore_index
                 y_pred = y_pred * mask
                 y_true = y_true * mask
-
-        scores = self.compute_score(y_pred, y_true.type_as(y_pred), smooth=self.smooth, eps=self.eps, dims=dims)
+        
+        scores = self.compute_score(y_pred, y_true.type_as(y_pred), smooth=self.smooth, dims=dims)
 
         if self.log_loss:
-            loss = -torch.log(scores.clamp_min(self.eps))
+            loss = -torch.log(scores)
         else:
             loss = 1.0 - scores # Gamma 
 
@@ -136,9 +129,8 @@ class DiceLoss(_Loss):
     def aggregate_loss(self, loss):
         return loss.mean()
 
-    def compute_score(self, output, target, smooth=0.0, eps=1e-7, dims=None) -> torch.Tensor:
-        return soft_dice_score(output, target, smooth, eps, dims)
-
+    def compute_score(self, output, target, smooth=1e-7, dims=None) -> torch.Tensor:
+        return soft_dice_score(output, target, smooth, dims)
 
 
 def soft_tversky_score(
@@ -146,8 +138,7 @@ def soft_tversky_score(
     target: torch.Tensor,
     alpha: float,
     beta: float,
-    smooth: float = 0.0,
-    eps: float = 1e-7,
+    smooth: float = 1e-7,
     dims=None,
 ) -> torch.Tensor:
     assert output.size() == target.size()
@@ -160,8 +151,56 @@ def soft_tversky_score(
         fp = torch.sum(output * (1.0 - target))
         fn = torch.sum((1 - output) * target)
 
-    tversky_score = (intersection + smooth) / (intersection + alpha * fp + beta * fn + smooth).clamp_min(eps)
+    tversky_score = intersection / (intersection + alpha * fp + beta * fn + smooth)
     return tversky_score
+
+class FocalTverskyLoss(DiceLoss): # This is tversky loss
+    def __init__(
+        self,
+        mode: str = "multiclass",
+        classes: List[int] = None,
+        log_loss: bool = False,
+        from_logits: bool = True,
+        smooth: float = 1e-7,
+        ignore_index: Optional[int] = None,
+        alpha=0.7, beta= 0.3, gamma= 3
+    ):
+
+        super().__init__(mode, classes, log_loss, from_logits, smooth, ignore_index)
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+
+    def aggregate_loss(self, loss):
+        # print(loss.mean(), "---", self.gamma)
+        return torch.mean(torch.pow(loss,self.gamma))
+
+    def compute_score(self, output, target, smooth=0.0, dims=None) -> torch.Tensor:
+        return soft_tversky_score(output, target, self.alpha, self.beta, smooth, dims)
+
+# class next_test(DiceLoss): # This is focal tversky loss
+#     def __init__(
+#         self,
+#         mode: str = "multiclass",
+#         classes: List[int] = None,
+#         log_loss: bool = False,
+#         from_logits: bool = True,
+#         smooth: float = 1e-7,
+#         ignore_index: Optional[int] = None,
+#         alpha=0.7, beta= 0.3, gamma= 3
+#     ):
+
+#         super().__init__(mode, classes, log_loss, from_logits, smooth, ignore_index)
+#         self.alpha = alpha
+#         self.beta = beta
+#         self.gamma = gamma
+
+#     def aggregate_loss(self, loss):
+#         # print(loss.mean(), "---", self.gamma)
+#         return torch.mean(torch.pow(1 - loss,1/self.gamma))
+
+#     def compute_score(self, output, target, smooth=0.0, dims=None) -> torch.Tensor:
+#         return soft_tversky_score(output, target, self.alpha, self.beta, smooth, dims)
 
 class DualFocalloss(torch.nn.Module):
     '''
@@ -195,29 +234,29 @@ class DualFocalloss(torch.nn.Module):
             loss = loss
         return loss
 
-class FocalTverskyLoss(torch.nn.Module):
-    def __init__(self, weight=None, size_average=True, alpha=0.7, beta= 0.3, gamma= 3):
-        super(FocalTverskyLoss, self).__init__()
-        self.alpha=alpha
-        self.beta=beta
-        self.gamma=gamma
+# class FocalTverskyLoss(torch.nn.Module):
+#     def __init__(self, weight=None, size_average=True, alpha=0.7, beta= 0.3, gamma= 3):
+#         super(FocalTverskyLoss, self).__init__()
+#         self.alpha=alpha
+#         self.beta=beta
+#         self.gamma=gamma
 
-    def forward(self, inputs, targets, smooth=1e-7):
+#     def forward(self, targets, inputs, smooth=1e-7):
         
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
+#         #comment out if your model contains a sigmoid or equivalent activation layer
+#         # inputs = F.sigmoid(inputs)       
+#         # targets = torch.softmax(targets, dim=1)
+#         #flatten label and prediction tensors
+#         inputs = inputs.view(-1)
+#         targets = targets.view(-1)
         
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
+#         #True Positives, False Positives & False Negatives
+#         TP = (inputs * targets).sum()    
+#         FP = ((1-targets) * inputs).sum()
+#         FN = (targets * (1-inputs)).sum()
         
-        #True Positives, False Positives & False Negatives
-        TP = (inputs * targets).sum()    
-        FP = ((1-targets) * inputs).sum()
-        FN = (targets * (1-inputs)).sum()
-        
-        Tversky = (TP + smooth) / (TP + self.alpha*FP + self.beta*FN + smooth)  
-        FocalTversky = (1 - Tversky)**self.gamma
+#         Tversky = (TP + smooth) / (TP + self.alpha*FP + self.beta*FN + smooth)  
+#         FocalTversky = (1 - Tversky)**self.gamma
                        
-        return FocalTversky
+#         return FocalTversky
     

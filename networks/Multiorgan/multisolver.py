@@ -8,7 +8,7 @@ import torchvision
 from torch import optim
 from utils_metrics import AverageMeter, EarlyStopping
 import segmentation_models_pytorch as smp 
-from networks.losses import DiceLoss, FocalTverskyLoss, DualFocalloss
+from networks.losses import DiceLoss, FocalTverskyLoss # , DualFocalloss : lathos apotelesmata
 # from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
 from networks.network import U_Net,R2U_Net,AttU_Net,R2AttU_Net,ResAttU_Net
 import csv
@@ -22,7 +22,7 @@ from sklearn.model_selection import KFold
 class MultiSolver(object):
 	def __init__(
 		self, config: argparse.Namespace, train_loader: data.DataLoader, valid_loader: data.DataLoader, 
-		classes: dict, save_images: bool= True,) -> None:
+		classes: dict, save_images: bool= False,) -> None:
 		# K_fold Cross validation
 
 		self.k_folds = config.k_folds
@@ -51,7 +51,7 @@ class MultiSolver(object):
 		self.early_patience = config.early_stopping
 		# Using this loss we dont have to perform one_hot is already implemented inside the function
 		# self.criterion = torch.nn.CrossEntropyLoss()
-		self.criterion = DualFocalloss()  
+		self.criterion = DiceLoss(mode=config.type) #FocalTverskyLoss()  
 		self.smp_enabled = config.smp
 		self.encoder_name = config.encoder_name
 		self.encoder_weights=config.encoder_weights		  
@@ -97,9 +97,7 @@ class MultiSolver(object):
 			true_mask[0] = self.classes_to_mask(true_mask[0])
 			true_mask = true_mask.to(torch.float32)
 		image = image.data.cpu()
-		print(pred_mask.shape)
 		pred_mask = pred_mask.data.cpu().squeeze()
-		print(pred_mask.shape)
 
 		true_mask = true_mask.data.cpu()
 
@@ -183,8 +181,7 @@ class MultiSolver(object):
 			with torch.no_grad():		
 				pred_mask = self.unet(image)
 				if self.output_ch > 1:
-					# print(true_mask.shape,pred_mask.shape)
-					loss = self.criterion(pred_mask,true_mask[:,0,:,:])
+					loss = self.criterion(pred_mask,true_mask.squeeze(1))
 
 				else:
 					loss = self.criterion(pred_mask,true_mask)
@@ -203,31 +200,25 @@ class MultiSolver(object):
 	def train_epoch(self) -> None:
 		self.unet.train(True)
 		metrics = AverageMeter()
-		epoch_loss_values = list()
 		with tqdm(total=self.n_train, desc=f'Epoch {self.epoch + 1}/{self.num_epochs}', unit='img') as pbar:
 			for i, (image, true_mask) in enumerate(self.train_loader):
 				image = image.to(self.device,dtype=torch.float32)
 				true_mask = true_mask.to(self.device, dtype=torch.long)
-				assert image.shape[1] == self.img_ch, f'Network has been defined with {self.img_ch} input channels'
-				self.optimizer.zero_grad(set_to_none=True)
-				# with torch.cuda.amp.autocast(enabled=self.amp):
-
+				self.optimizer.zero_grad()
 				pred_mask = self.unet(image)
 
 				if self.output_ch > 1:
-					loss = self.criterion(pred_mask,true_mask[:,0,:,:])
+					loss = self.criterion(pred_mask,true_mask.squeeze(1))
 				else:
 					loss = self.criterion(pred_mask,true_mask)
 				# Backprop + optimize
 				loss.backward()
 				self.optimizer.step()
 				pbar.update(int(image.shape[0]/self.batch_size))
-				self.global_step +=1
 				
 				metrics.update(loss.item(), true_mask, pred_mask, image.size(0), classes=self.classes)
 
 				pbar.set_postfix(**{'loss (batch)': loss.item()})
-			epoch_loss_values.append(metrics.avg_loss)
 		# Print the log info
 		print(f"[Training] [{self.epoch+1}/{self.num_epochs}, Lr: {self.optimizer.param_groups[0]['lr']}], Loss: {metrics.avg_loss}, DC: {metrics.all_dice}, \
 			Recall: {metrics.all_recall}, Precision: {metrics.all_precision}, Specificity: {metrics.all_specificity}, \
@@ -297,7 +288,6 @@ class MultiSolver(object):
 			print('%s is Successfully Loaded from %s'%(self.model_type,unet_path))
 		else:
 			self.n_train = len(self.train_loader)
-			self.global_step = 0
 			for epoch in range(self.num_epochs):
 				self.epoch = epoch
 				self.train_epoch()				

@@ -5,7 +5,7 @@ from re import I
 from sklearn.model_selection import KFold
 import torch
 from Multiorgan.multisolver import MultiSolver
-from Binary.solver import Solver
+# from Binary.solver import Solver
 from loaders.data_loader import ImageFolder, get_loader
 from torch.backends import cudnn
 import random

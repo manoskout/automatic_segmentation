@@ -105,7 +105,7 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
     # print(f"Predicted after torch.where : {np.unique(predicted)}")
     
     if not classes:
-        ground_truth = torch.where(ground_truth>0,1,0).cpu().detach().numpy()
+        ground_truth = torch.where(ground_truth>0,1,0).cpu().detach()
         precision_v = precision(predicted,ground_truth)
         recall_v = recall(predicted,ground_truth)
         specificity_v = specificity(predicted,ground_truth)
@@ -117,7 +117,7 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
 
         return recall_v, precision_v, specificity_v,sensitivity_v, dice_c, iou ,hausdorff_distance_v, hausdorff_distance_95_v
     else:
-        ground_truth = ground_truth.cpu().detach().numpy()
+        ground_truth = ground_truth.cpu().detach()
         precision_v = []
         recall_v = []
         specificity_v = []
@@ -293,44 +293,7 @@ def accuracy(test=None, reference=None, confusion_matrix=None, **kwargs):
 
     return float((tp + tn) / (tp + fp + tn + fn))
 
-#PyTorch
-class DiceBCELoss(nn.Module):
-    def __init__(self, weight=None, size_average=True):
-        super(DiceBCELoss, self).__init__()
 
-    def forward(self, inputs: torch.Tensor, targets: torch.Tensor, smooth: int =1) -> torch.Tensor:
-        
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = torch.sigmoid(inputs)       
-        
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-        
-        intersection = (inputs * targets).sum()                            
-        dice_loss = 1 - (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
-        BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
-        Dice_BCE = BCE + dice_loss
-        
-        return Dice_BCE
-
-class DiceLoss(nn.Module):
-    def __init__(self, weight=None, size_average: bool= True):
-        super(DiceLoss, self).__init__()
-
-    def forward(self, inputs: torch.Tensor, targets: torch.Tensor, smooth: int=1):
-        
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = torch.sigmoid(inputs)       
-        
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-        
-        intersection = (inputs * targets).sum()                            
-        dice = (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
-        
-        return 1 - dice
 
 class FocalLoss(nn.Module):
     def __init__(self, weight=None, size_average=True):
@@ -352,25 +315,7 @@ class FocalLoss(nn.Module):
                        
         return focal_loss
 
-class LogCoshDiceLoss(nn.Module):   # PROBLEMATIC
-    def __init__(self,):
-        super(LogCoshDiceLoss, self).__init__()
 
-    def forward(self, inputs: torch.Tensor, targets: torch.Tensor):
-        
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = torch.sigmoid(inputs)       
-        
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-        
-        intersection = (inputs * targets).sum()                            
-        dice = (2.*intersection)/(inputs.sum() + targets.sum())  
-        log_cosh_dice = torch.log(
-            (torch.exp(dice)+torch.exp(-dice)) / 2.0
-        )
-        return log_cosh_dice
 
 
 class AverageMeter():
