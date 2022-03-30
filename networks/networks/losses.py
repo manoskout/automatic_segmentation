@@ -154,31 +154,7 @@ def soft_tversky_score(
     tversky_score = intersection / (intersection + alpha * fp + beta * fn + smooth)
     return tversky_score
 
-class FocalTverskyLoss(DiceLoss): # This is tversky loss
-    def __init__(
-        self,
-        mode: str = "multiclass",
-        classes: List[int] = None,
-        log_loss: bool = False,
-        from_logits: bool = True,
-        smooth: float = 1e-7,
-        ignore_index: Optional[int] = None,
-        alpha=0.7, beta= 0.3, gamma= 3
-    ):
-
-        super().__init__(mode, classes, log_loss, from_logits, smooth, ignore_index)
-        self.alpha = alpha
-        self.beta = beta
-        self.gamma = gamma
-
-    def aggregate_loss(self, loss):
-        # print(loss.mean(), "---", self.gamma)
-        return torch.mean(torch.pow(loss,self.gamma))
-
-    def compute_score(self, output, target, smooth=0.0, dims=None) -> torch.Tensor:
-        return soft_tversky_score(output, target, self.alpha, self.beta, smooth, dims)
-
-# class next_test(DiceLoss): # This is focal tversky loss
+# class FocalTverskyLoss(DiceLoss): # This is tversky loss
 #     def __init__(
 #         self,
 #         mode: str = "multiclass",
@@ -197,10 +173,34 @@ class FocalTverskyLoss(DiceLoss): # This is tversky loss
 
 #     def aggregate_loss(self, loss):
 #         # print(loss.mean(), "---", self.gamma)
-#         return torch.mean(torch.pow(1 - loss,1/self.gamma))
+#         return torch.mean(torch.pow(loss,self.gamma))
 
 #     def compute_score(self, output, target, smooth=0.0, dims=None) -> torch.Tensor:
 #         return soft_tversky_score(output, target, self.alpha, self.beta, smooth, dims)
+
+class FocalTverskyLoss(DiceLoss): # This is focal tversky loss
+    def __init__(
+        self,
+        mode: str = "multiclass",
+        classes: List[int] = None,
+        log_loss: bool = False,
+        from_logits: bool = True,
+        smooth: float = 1e-7,
+        ignore_index: Optional[int] = None,
+        alpha=0.7, beta= 0.3, gamma= 3
+    ):
+
+        super().__init__(mode, classes, log_loss, from_logits, smooth, ignore_index)
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+
+    def aggregate_loss(self, loss):
+        # print(loss.mean(), "---", self.gamma)
+        return torch.mean(torch.pow(1 - loss,1/self.gamma))
+
+    def compute_score(self, output, target, smooth=0.0, dims=None) -> torch.Tensor:
+        return soft_tversky_score(output, target, self.alpha, self.beta, smooth, dims)
 
 class DualFocalloss(torch.nn.Module):
     '''

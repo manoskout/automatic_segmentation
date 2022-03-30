@@ -136,9 +136,15 @@ class MultiSolver(object):
 				]
 		if classes:
 			for index in range(len(classes.items())):
-				avg_metrics.append(metric.avg_iou[index])
-				avg_metrics.append(metric.avg_dice[index])
-				avg_metrics.append(metric.avg_hd[index])
+				try:
+					avg_metrics.append(metric.iou[index])
+					avg_metrics.append(metric.dice[index])
+					avg_metrics.append(metric.hd95[index])
+				except IndexError:
+					print("IndexError")
+					avg_metrics.append(np.nan)
+					avg_metrics.append(np.nan)
+					avg_metrics.append(np.nan)
 		if mode == "Training":
 			self.writer.add_scalars("learning_rate", {mode:lr}, epoch)
 		self.writer.add_scalars("loss", {mode:metric.avg_loss}, epoch)
@@ -195,7 +201,9 @@ class MultiSolver(object):
 		recall = metrics.all_recall, prec= metrics.all_precision, spec= metrics.all_specificity, sens = metrics.all_sensitivity,
 		iou = metrics.all_iou, hd= metrics.all_hd, hd95=metrics.all_hd95))
 		self._update_metricRecords(self.wr_valid,"Validation",metrics, self.classes, self.epoch, self.optimizer.param_groups[0]['lr'])
-		return metrics.avg_loss
+		avg_loss =metrics.avg_loss
+		metrics.reset()
+		return avg_loss
 	
 	def train_epoch(self) -> None:
 		self.unet.train(True)
@@ -226,7 +234,7 @@ class MultiSolver(object):
 			HD: {metrics.all_hd}, HD95: {metrics.all_hd95}")
 
 		self._update_metricRecords(self.wr_train,"Training",metrics, self.classes, self.epoch, self.optimizer.param_groups[0]['lr'])
-		
+		metrics.reset()
 		#===================================== Validation ====================================#
 		division_step = (self.n_train // (10 * self.batch_size))
 		if division_step > 0:
