@@ -19,3 +19,6 @@ The CNN trained on 75 examination of 75 patients. Due to the lack of medical sam
 
 ### Conclusion
 A deep learning CNN can automatically segment the OARs from clinical MR Images 
+
+
+# MRIdian
