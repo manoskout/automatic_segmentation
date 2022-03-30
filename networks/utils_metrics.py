@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from medpy import metric
-
+import math
 def assert_shape(test, reference):
 
     assert test.shape == reference.shape, "Shape mismatch: {} and {}".format(
@@ -111,7 +111,7 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
         specificity_v = specificity(predicted,ground_truth)
         sensitivity_v = sensitivity(predicted,ground_truth)
         hausdorff_distance_v = hausdorff_distance(predicted,ground_truth)
-        hausdorff_distance_95_v = hausdorff_distance_95(predicted,ground_truth)
+        hausdorff_distance_95_v =hausdorff_distance_95(predicted,ground_truth)
         dice_c = dice(predicted,ground_truth)
         iou = jaccard(predicted,ground_truth)
 
@@ -126,17 +126,21 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
         hausdorff_distance_95_v = []
         dice_c = []
         iou = []
-        for item, id in classes.items():            
-            # print(f"{id}, organ: {item}")
+        for item, id in classes.items():   
             class_truth = np.where(ground_truth==id, 1, 0)[:,0,:,:]
+            # print(f"{id}, organ: {item}")
+            # Deal with the issue of the imbalanced dataset
+            # if not math.isnan(dice(predicted[:,id,:,:],class_truth)) and dice(predicted[:,id,:,:],class_truth) != 0.:
             precision_v.append(precision(predicted[:,id,:,:],class_truth))
             recall_v.append(recall(predicted[:,id,:,:],class_truth))
             specificity_v.append(specificity(predicted[:,id,:,:],class_truth))
             sensitivity_v.append(sensitivity(predicted[:,id,:,:],class_truth))
             hausdorff_distance_v.append(hausdorff_distance(predicted[:,id,:,:],class_truth))
             hausdorff_distance_95_v.append(hausdorff_distance_95(predicted[:,id,:,:],class_truth))
+            # print(dice(predicted[:,id,:,:],class_truth))
             dice_c.append(dice(predicted[:,id,:,:],class_truth))
             iou.append(jaccard(predicted[:,id,:,:],class_truth))
+            
         # print(precision_v, recall_v, specificity_v, sensitivity_v, hausdorff_distance_v, hausdorff_distance_95_v, dice_c, iou)
         return (
             np.array(recall_v), np.array(precision_v), np.array(specificity_v), 
@@ -147,7 +151,7 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
 
 
 
-def hausdorff_distance(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=False, voxel_spacing=None, connectivity=1, **kwargs):
+def hausdorff_distance(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=True, voxel_spacing=None, connectivity=1, **kwargs):
 
     if confusion_matrix is None:
         confusion_matrix = ConfusionMatrix(test, reference)
@@ -157,7 +161,7 @@ def hausdorff_distance(test=None, reference=None, confusion_matrix=None, nan_for
     if test_empty or test_full or reference_empty or reference_full:
         if nan_for_nonexisting:
             # https://github.com/MIC-DKFZ/nnUNet/issues/380
-            return float(373.12866)
+            return float('NaN')
         else:
             return 0
 
@@ -176,7 +180,7 @@ def hausdorff_distance_95(test=None, reference=None, confusion_matrix=None, nan_
     if test_empty or test_full or reference_empty or reference_full:
         if nan_for_nonexisting:
             # https://github.com/MIC-DKFZ/nnUNet/issues/380
-            return float(373.12866)
+            return float('NaN')
         else:
             return 0
 
@@ -196,11 +200,11 @@ def dice(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=T
 
     if test_empty and reference_empty:
         if nan_for_nonexisting:
-            return float("NaN")
+            return float('NaN')
         else:
             return 0.
-
-    return float(2. * tp / (2 * tp + fp + fn))
+    dc = float(2. * tp / (2 * tp + fp + fn))
+    return dc if dc!=0. else np.nan
 
 
 def jaccard(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=True, **kwargs):
@@ -214,11 +218,11 @@ def jaccard(test=None, reference=None, confusion_matrix=None, nan_for_nonexistin
 
     if test_empty and reference_empty:
         if nan_for_nonexisting:
-            return float("NaN")
+            return float('NaN')
         else:
             return 0.
-
-    return float(tp / (tp + fp + fn))
+    jc = float(tp / (tp + fp + fn))
+    return jc if jc!=0. else np.nan
 
 
 def precision(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=True, **kwargs):
@@ -231,7 +235,7 @@ def precision(test=None, reference=None, confusion_matrix=None, nan_for_nonexist
 
     if test_empty:
         if nan_for_nonexisting:
-            return float("NaN")
+            return float('NaN')
         else:
             return 0.
 
@@ -249,7 +253,7 @@ def sensitivity(test=None, reference=None, confusion_matrix=None, nan_for_nonexi
     # https://github.com/MIC-DKFZ/nnUNet/issues/380 error about NAN value
     if reference_empty:
         if nan_for_nonexisting:
-            return float(0.)
+            return float('NaN')
         else:
             return 0.
     try:    
@@ -276,7 +280,7 @@ def specificity(test=None, reference=None, confusion_matrix=None, nan_for_nonexi
 
     if reference_full:
         if nan_for_nonexisting:
-            return float("NaN")
+            return float('NaN')
         else:
             return 0.
 
@@ -360,8 +364,10 @@ class AverageMeter():
         There are two different type of metrics [muliclass, binary],
         we setted the binary as predifined
         """
-        recall, precision, specificity, sensitivity, dice, iou , hd, hd95 =  collect_metrics(true_mask,pred_mask, classes)
+        # del classes[0]
 
+        recall, precision, specificity, sensitivity, dice, iou , hd, hd95 =  collect_metrics(true_mask,pred_mask, classes)
+        # print(dice)
         self.count += n
 
         self.loss = loss
@@ -380,35 +386,36 @@ class AverageMeter():
 
         
 
-        self.sum_iou += iou * n
-        self.sum_hd += hd * n
-        self.sum_hd95 += hd95 * n
-        self.sum_dice += dice * n
-        self.sum_specificity += specificity * n
-        self.sum_sensitivity += sensitivity * n
-        self.sum_recall += recall * n
-        self.sum_precision += precision * n
+        # self.sum_iou += iou * n
+        # self.sum_hd += hd * n
+        # self.sum_hd95 += hd95 * n
+        # self.sum_dice += dice * n
+        # self.sum_specificity += specificity * n
+        # self.sum_sensitivity += sensitivity * n
+        # self.sum_recall += recall * n
+        # self.sum_precision += precision * n
 
         
-        self.avg_iou = self.sum_iou / self.count
-        self.avg_hd = self.sum_hd / self.count
-        self.avg_hd95 = self.sum_hd95 / self.count
-        self.avg_dice = self.sum_dice / self.count
-        self.avg_specificity = self.sum_specificity / self.count
-        self.avg_sensitivity = self.sum_sensitivity / self.count
-        self.avg_recall = self.sum_recall / self.count
-        self.avg_precision = self.sum_precision /self.count
+        # self.avg_iou = self.sum_iou / self.count
+        # self.avg_hd = self.sum_hd / self.count
+        # self.avg_hd95 = self.sum_hd95 / self.count
+        # self.avg_dice = self.sum_dice / self.count
+        # self.avg_specificity = self.sum_specificity / self.count
+        # self.avg_sensitivity = self.sum_sensitivity / self.count
+        # self.avg_recall = self.sum_recall / self.count
+        # self.avg_precision = self.sum_precision /self.count
+
 
         if classes:
             # Get the mean from all the classes
-            self.all_iou = self.avg_iou.mean()
-            self.all_hd = self.avg_hd.mean()
-            self.all_hd95 = self.avg_hd95.mean()
-            self.all_dice = self.avg_dice.mean()
-            self.all_specificity = self.avg_specificity.mean()
-            self.all_sensitivity = self.avg_sensitivity.mean()
-            self.all_recall = self.avg_recall.mean()
-            self.all_precision = self.avg_precision.mean()
+            self.all_iou = np.nanmean(self.iou)
+            self.all_hd = np.nanmean(self.hd)
+            self.all_hd95 = np.nanmean(self.hd95)
+            self.all_dice = np.nanmean(self.dice)
+            self.all_specificity = np.nanmean(self.specificity)
+            self.all_sensitivity = np.nanmean(self.sensitivity)
+            self.all_recall = np.nanmean(self.recall)
+            self.all_precision = np.nanmean(self.precision)
         else:
             # TODO -> make it more readable 
             self.all_iou = self.avg_iou
