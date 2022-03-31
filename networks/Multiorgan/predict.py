@@ -52,9 +52,9 @@ def save_validation_results(cfg,image, pred_mask,counter=0, res_path=""):#pred_m
     pred_mask = pred_mask.squeeze().numpy()
     print(np.unique(pred_mask))
     # pred_mask = np.ma.masked_where(pred_mask == 0, pred_mask)
-    im = Image.fromarray(pred_mask)
-    result_f = os.path.join(res_path, f"mask{counter}.tiff")
-    im.save(result_f)
+    # im = Image.fromarray(pred_mask)
+    # result_f = os.path.join(res_path, f"mask{counter}.tiff")
+    # im.save(result_f)
     fig, ax1 = plt.subplots(1,1)
 
     plt.rcParams["figure.figsize"] = [7.00, 3.50]
@@ -64,7 +64,7 @@ def save_validation_results(cfg,image, pred_mask,counter=0, res_path=""):#pred_m
     ax1.axes.xaxis.set_visible(False)
     ax1.axes.yaxis.set_visible(False)
 
-    # plt.show()
+    plt.show()
 
 
 #===================================== Test ====================================#
@@ -72,9 +72,11 @@ def test(cfg, unet_path,test_loader):
     unet = build_model(cfg)
     if os.path.isfile(unet_path):
         # Load the pretrained Encoder
-        unet.load_state_dict(torch.load(unet_path))
+        if cfg.device =="cuda":
+            unet.load_state_dict(torch.load(unet_path))
+        else:
+            unet.load_state_dict(torch.load(unet_path,map_location=torch.device('cpu')))
         print('%s is Successfully Loaded from %s'%(cfg.model_type,unet_path))
-    unet.eval()
     test_len = len(test_loader)
     length = 0
     results = [] 
@@ -87,6 +89,8 @@ def test(cfg, unet_path,test_loader):
         image = images.to(cfg.device)
 
         length+=1
+        unet.eval()
+
         with torch.no_grad():
             pred_mask=unet(image)
 
@@ -109,12 +113,12 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=4)
     # misc
     parser.add_argument('--mode', type=str, default='predict')
-    parser.add_argument('--model_name', type=str, default='U_Net-200-0.0010-15_0.pkl')
+    parser.add_argument('--model_name', type=str, default='checkpoint.pkl')
     parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net\\26_3_multiclass_200_4')
-    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\prev_dataset\\problematic_pat\\060_PRO_pCT_CGFL_ok\\test')
-    parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\prev_dataset\\problematic_pat\\060_PRO_pCT_CGFL_ok\\res')
-    parser.add_argument('--device', type=str, default="cuda")
+    parser.add_argument('--model_path', type=str, default='/Users/manoskoutoulakis/Desktop/presentation_set/for_presentation')
+    parser.add_argument('--test_path', type=str, default='/Users/manoskoutoulakis/Desktop/test')
+    parser.add_argument('--result_path', type=str, default='/Users/manoskoutoulakis/Desktop/test')
+    parser.add_argument('--device', type=str, default="cpu")
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
@@ -126,6 +130,8 @@ if __name__ == '__main__':
     unet_path = os.path.join(
 			config.model_path, config.model_name
 			)
+    del config.classes[0] # Delete the background
+
     test_loader = get_loader(image_path=config.test_path,
                         image_size=config.image_size,
                         batch_size=config.batch_size,
