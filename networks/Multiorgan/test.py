@@ -17,7 +17,7 @@ import segmentation_models_pytorch as smp
 import matplotlib.pyplot as plt
 from utils import classes_to_mask, class_mapping, build_model
 
-def save_validation_results(cfg,image,true_mask, pred_mask,counter=0):#pred_mask_1,pred_mask_2,pred_mask_3,counter = 0 ):
+def save_validation_results(cfg,image,true_mask, pred_mask,counter, metric, classes):#pred_mask_1,pred_mask_2,pred_mask_3,counter = 0 ):
 
     image = image.data.cpu()
     image = image.squeeze()
@@ -33,21 +33,49 @@ def save_validation_results(cfg,image,true_mask, pred_mask,counter=0):#pred_mask
     pred_mask = np.ma.masked_where(pred_mask == 0, pred_mask)
     true_mask = np.ma.masked_where(true_mask == 0, true_mask)
     
-    fig, (ax1,ax2) = plt.subplots(1,2)
-
-    plt.rcParams["figure.figsize"] = [7.00, 3.50]
-    plt.rcParams["figure.autolayout"] = True
-    ax1.imshow(image,cmap="gray",interpolation='none')
-    ax1.imshow(true_mask,cmap="cool",interpolation='none', alpha = 0.5)
+    metr = []
+    # plt.rcParams["figure.figsize"] = [7.00, 3.50]
+    # plt.rcParams["figure.autolayout"] = True
     
-    ax1.axes.xaxis.set_visible(False)
-    ax1.axes.yaxis.set_visible(False)
+        # print(f"For class {index}:\n")
+        # print(f"IOU: {metric.iou[index]},\t Dice: {metric.dice[index]},\t HD95: {metric.hd95[index]}")
 
-    ax2.imshow(image,cmap="gray",interpolation='none')
-    ax2.imshow(pred_mask,cmap="cool",interpolation='none', alpha = 0.5)
+    plt.subplot(2,1,1)
+    for index,organ in zip(range(len(classes.items())),["RECTUM","VESSIE","FEM_LEFT","FEM_RIGHT"]):
+        avg_metrics = []
+        avg_metrics.append(organ)
+        try:    
+            avg_metrics.append(metric.iou[index])
+            avg_metrics.append(metric.dice[index])
+            avg_metrics.append(metric.hd95[index])  
+        except IndexError:
+            print("IndexError")
+            avg_metrics.append(np.nan)
+            avg_metrics.append(np.nan)
+            avg_metrics.append(np.nan)
+        metr.append(avg_metrics)
+    clust_data = np.array(metr)
+    collabel=("Organs", "IOU", "Dice", "HD95")
+    plt.axis('tight')
+    plt.axis('off')
+    table = plt.table(cellText=clust_data,colLabels=collabel,loc='center')
+    table.set_fontsize(16)
+    # table.scale(1.5, 1.5)  # may help
 
-    ax2.axes.xaxis.set_visible(False)
-    ax2.axes.yaxis.set_visible(False)
+    # plt.plot(clust_data[:,0],clust_data[:,1])
+
+
+    plt.subplot(2,2,3)
+    plt.title("Ground Truth")
+    plt.imshow(image,cmap="gray",interpolation='none')
+    plt.imshow(true_mask,cmap="cool",interpolation='none', alpha = 0.5)
+    plt.axis('off')
+
+    plt.subplot(2,2,4)
+    plt.title("Predicted")
+    plt.imshow(image,cmap="gray",interpolation='none')
+    plt.imshow(pred_mask,cmap="cool",interpolation='none', alpha = 0.5)
+    plt.axis('off')
     
 
     plt.show()
@@ -62,14 +90,18 @@ def _update_metricRecords(writer, csv_writer, metric, mode="test", classes=None,
     if classes:
         for index in range(len(classes.items())):
             try:
+                
                 avg_metrics.append(metric.iou[index])
                 avg_metrics.append(metric.dice[index])
                 avg_metrics.append(metric.hd95[index])
+                
             except IndexError:
                 print("IndexError")
                 avg_metrics.append(np.nan)
                 avg_metrics.append(np.nan)
                 avg_metrics.append(np.nan)
+            # print(f"For class {index}:\n")
+            # print(f"IOU: {metric.iou[index]},\t Dice: {metric.dice[index]},\t HD95: {metric.hd95[index]}")
         # writer.add_scalars("recall", {mode:metric.all_recall}, img_num)
         # writer.add_scalars("sensitivity", {mode:metric.all_sensitivity}, img_num)
         # writer.add_scalars("specificity", {mode:metric.all_specificity}, img_num)
@@ -77,13 +109,13 @@ def _update_metricRecords(writer, csv_writer, metric, mode="test", classes=None,
         # writer.add_scalars("jaccard", {mode:metric.all_iou}, img_num)
         # writer.add_scalars("hausdorff", {mode:metric.all_hd}, img_num)
         # writer.add_scalars("hausforff_95", {mode:metric.all_hd95}, img_num)
-    csv_writer.writerow( 
-        avg_metrics
-        )
+    # csv_writer.writerow( 
+    #     avg_metrics
+    #     )
     # print(f"Testing Res: dice: {metric.all_dice}, iou: {metric.all_iou}, hd: {metric.all_hd} ")
 
 #===================================== Test ====================================#
-def test(cfg, unet_path,test_loader, test_save_path, device ="cuda"):
+def test(cfg, unet_path,test_loader, test_save_path):
     testing_log = open(
         os.path.join(
             test_save_path,
@@ -112,7 +144,10 @@ def test(cfg, unet_path,test_loader, test_save_path, device ="cuda"):
     unet = build_model(cfg)
     if os.path.isfile(unet_path):
         # Load the pretrained Encoder
-        unet.load_state_dict(torch.load(unet_path))
+        if cfg.device == "cuda":
+            unet.load_state_dict(torch.load(unet_path))
+        else:
+            unet.load_state_dict(torch.load(unet_path,map_location=torch.device('cpu')))
         print('%s is Successfully Loaded from %s'%(cfg.model_type,unet_path))
     unet.eval()
     test_len = len(test_loader)
@@ -124,19 +159,19 @@ def test(cfg, unet_path,test_loader, test_save_path, device ="cuda"):
 			desc="Test Round", 
 			unit="batch", 
 			leave=False):
-        image = image.to(device)
-        true_mask = true_mask.to(device)
+        image = image.to(cfg.device)
+        true_mask = true_mask.to(cfg.device)
         with torch.no_grad():
             pred_mask = unet(image)
         
         
         metrics.update(0, true_mask, pred_mask, image.size(0), classes=cfg.classes) 
         # print(f"\niou: {metrics.iou}, \ndice: {metrics.dice}, \nHD: {metrics.hd95}")
+        _update_metricRecords(writer,wr_test,metrics, classes=cfg.classes, img_num=test_len-length)
 
-        save_validation_results(cfg,image,true_mask, pred_mask,length)#pred_mask_1,pred_mask_2,pred_mask_3,length)
+        save_validation_results(cfg,image,true_mask, pred_mask,length,metrics, cfg.classes)#pred_mask_1,pred_mask_2,pred_mask_3,length)
 
         length += image.size(0)/cfg.batch_size
-        _update_metricRecords(writer,wr_test,metrics, classes=cfg.classes, img_num=test_len-length)
         metrics.reset()
 
 if __name__ == '__main__':
@@ -153,13 +188,17 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=4)
     # misc
     parser.add_argument('--mode', type=str, default='test')
-    parser.add_argument('--model_name', type=str, default='ResAttU_Net-200-0.0010-15_0.pkl')
-    parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net\\24_3_multiclass_200_4')
-    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\test')
-    parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\metrics')
-
-    parser.add_argument('--device', type=str, default="cuda")
+    # parser.add_argument('--model_name', type=str, default='ResAttU_Net-200-0.0010-15_0.pkl')
+    # parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
+    # parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net\\24_3_multiclass_200_4')
+    # parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\test')
+    # parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\metrics')
+    parser.add_argument('--model_name', type=str, default='checkpoint.pkl')
+    parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
+    parser.add_argument('--model_path', type=str, default='/Users/manoskoutoulakis/Desktop/presentation_set/for_presentation')
+    parser.add_argument('--test_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set')
+    parser.add_argument('--result_path', type=str, default='/Users/manoskoutoulakis/Desktop/test')
+    parser.add_argument('--device', type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
@@ -177,6 +216,7 @@ if __name__ == '__main__':
                         num_workers=config.num_workers,
                         classes = config.classes,
                         mode='test')
-                        
-    device = "cuda"
-    test(config,unet_path,test_loader, config.result_path, device)
+    try:
+        test(config,unet_path,test_loader, config.result_path)
+    except KeyboardInterrupt:
+        os._exit(1)
