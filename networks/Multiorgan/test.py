@@ -16,7 +16,7 @@ from loaders.data_loader import get_loader
 import segmentation_models_pytorch as smp
 import matplotlib.pyplot as plt
 from utils import classes_to_mask, class_mapping, build_model
-
+import pandas as pd
 def save_validation_results(cfg,image,true_mask, pred_mask,counter, metric, classes):#pred_mask_1,pred_mask_2,pred_mask_3,counter = 0 ):
 
     image = image.data.cpu()
@@ -60,9 +60,8 @@ def save_validation_results(cfg,image,true_mask, pred_mask,counter, metric, clas
     plt.axis('off')
     table = plt.table(cellText=clust_data,colLabels=collabel,loc='center')
     table.set_fontsize(16)
-    # table.scale(1.5, 1.5)  # may help
+    table.scale(1.5, 1.5)  # may help
 
-    # plt.plot(clust_data[:,0],clust_data[:,1])
 
 
     plt.subplot(2,2,3)
@@ -78,7 +77,9 @@ def save_validation_results(cfg,image,true_mask, pred_mask,counter, metric, clas
     plt.axis('off')
     
 
-    plt.show()
+    # plt.
+    # 
+    # show()
 
 def _update_metricRecords(writer, csv_writer, metric, mode="test", classes=None, img_num=1) -> None:	
     # avg_metrics = [
@@ -109,25 +110,16 @@ def _update_metricRecords(writer, csv_writer, metric, mode="test", classes=None,
         # writer.add_scalars("jaccard", {mode:metric.all_iou}, img_num)
         # writer.add_scalars("hausdorff", {mode:metric.all_hd}, img_num)
         # writer.add_scalars("hausforff_95", {mode:metric.all_hd95}, img_num)
-    # csv_writer.writerow( 
-    #     avg_metrics
-    #     )
+    csv_writer.writerow( 
+        avg_metrics
+        )
     # print(f"Testing Res: dice: {metric.all_dice}, iou: {metric.all_iou}, hd: {metric.all_hd} ")
 
 #===================================== Test ====================================#
-def test(cfg, unet_path,test_loader, test_save_path):
-    testing_log = open(
-        os.path.join(
-            test_save_path,
-            'result_testing.csv'
-        ), 
-        'a', 
-        encoding='utf-8', 
-        newline=''
-    )
+def test(cfg, unet_path,test_loader, testing_log):
     print(f"Metrics collector path: {testing_log}")
     wr_test = csv.writer(testing_log)
-    metric_list = ["dice","iou","hd95"] #["precision", "recall", "sensitivity", "specificity", "dice", "iou","hd","hd95"]
+    metric_list = ["iou","dice","hd95"] #["precision", "recall", "sensitivity", "specificity", "dice", "iou","hd","hd95"]
     # metric_list = []
     if cfg.classes:
         # print(cfg.classes)
@@ -173,7 +165,24 @@ def test(cfg, unet_path,test_loader, test_save_path):
 
         length += image.size(0)/cfg.batch_size
         metrics.reset()
+def average_performance(results_csv):
+    df = pd.read_csv(results_csv)
+    headers = df.columns.values 
 
+    splitted_headers = [list(headers[x:x+3]) for x in range(0, len(headers),3)]
+
+    for organ, (iou,dice, hd95) in zip(["overall", "RECTUM","VESSIE","FEM_D", "FEM_G"],splitted_headers):
+        print(f"For {organ}:")
+        dice_mean = df[dice].mean()
+        iou_mean = df[iou].mean()
+        hd95_mean = df[hd95].mean()
+        dice_std = df[dice].std()
+        iou_std = df[iou].std()
+        hd95_std = df[hd95].std()
+        print(f"Mean Dice: {dice_mean}\tMean IoU: {iou_mean}\tMean HD95: {hd95_mean}")
+        print(f"STD Dice: {dice_std}\tSTD IoU: {iou_std}\tSTD HD95: {hd95_std}")
+        print("\n------------------------------\n")
+    # return results
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -193,11 +202,11 @@ if __name__ == '__main__':
     # parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net\\24_3_multiclass_200_4')
     # parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\test')
     # parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\metrics')
-    parser.add_argument('--model_name', type=str, default='checkpoint.pkl')
-    parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
+    parser.add_argument('--model_name', type=str, default='resatt_checkpoint.pkl')
+    parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
     parser.add_argument('--model_path', type=str, default='/Users/manoskoutoulakis/Desktop/presentation_set/for_presentation')
     parser.add_argument('--test_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set')
-    parser.add_argument('--result_path', type=str, default='/Users/manoskoutoulakis/Desktop/test')
+    parser.add_argument('--result_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/metrics')
     parser.add_argument('--device', type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
@@ -216,7 +225,18 @@ if __name__ == '__main__':
                         num_workers=config.num_workers,
                         classes = config.classes,
                         mode='test')
+    results_csv = os.path.join(
+            config.test_path,
+            'result_testing.csv'
+        )
+    testing_log = open(
+        results_csv, 
+        'a', 
+        encoding='utf-8', 
+        newline=''
+    )
     try:
-        test(config,unet_path,test_loader, config.result_path)
+        test(config,unet_path,test_loader,testing_log)
+        average_performance(results_csv)
     except KeyboardInterrupt:
         os._exit(1)

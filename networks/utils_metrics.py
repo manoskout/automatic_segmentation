@@ -100,7 +100,8 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
 
     # In our test 0 : background, 1: rectum, 2: vessie, 3: femoral_l, 4: femoral_r TODO-> get rid of the hardcoded method
     # print(f"Predicted before torch.where : {torch.unique(predicted)}")
-    predicted = torch.where(predicted>0,1,0).cpu().detach().numpy()
+    predicted = torch.where(predicted>0.5,1,0).cpu().detach().numpy()
+    # print(np.unique(predicted))
     
     # print(f"Predicted after torch.where : {np.unique(predicted)}")
     
@@ -117,7 +118,11 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
 
         return recall_v, precision_v, specificity_v,sensitivity_v, dice_c, iou ,hausdorff_distance_v, hausdorff_distance_95_v
     else:
+        # print(f"Unique in ground truth: {torch.unique(ground_truth.squeeze())}")
+        # print(f"Unique in predicted: {predicted.shape}")
+
         ground_truth = ground_truth.cpu().detach()
+
         precision_v = []
         recall_v = []
         specificity_v = []
@@ -129,6 +134,9 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
         for item, id in classes.items():   
             class_truth = np.where(ground_truth==id, 1, 0)[:,0,:,:]
             # print(f"{id}, organ: {item}")
+            # print(f"Unique in ground truth {np.unique(class_truth)} .... shape : {class_truth.shape}")
+            # print(f"Unique in predicted {np.unique(predicted[:,id,:,:])} .... shape : {predicted[:,id,:,:].shape}")
+            
             # Deal with the issue of the imbalanced dataset
             # if not math.isnan(dice(predicted[:,id,:,:],class_truth)) and dice(predicted[:,id,:,:],class_truth) != 0.:
             precision_v.append(precision(predicted[:,id,:,:],class_truth))
@@ -196,6 +204,7 @@ def dice(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=T
         confusion_matrix = ConfusionMatrix(test, reference)
 
     tp, fp, tn, fn = confusion_matrix.get_matrix()
+    # print(f"Dice : TP : {tp}, FP: {fp}, TN: {tn}, FN: {fn}")
     test_empty, test_full, reference_empty, reference_full = confusion_matrix.get_existence()
 
     if test_empty and reference_empty:
@@ -214,6 +223,8 @@ def jaccard(test=None, reference=None, confusion_matrix=None, nan_for_nonexistin
         confusion_matrix = ConfusionMatrix(test, reference)
 
     tp, fp, tn, fn = confusion_matrix.get_matrix()
+    # print(f"IOU : TP : {tp}, FP: {fp}, TN: {tn}, FN: {fn}")
+
     test_empty, test_full, reference_empty, reference_full = confusion_matrix.get_existence()
 
     if test_empty and reference_empty:
@@ -296,30 +307,6 @@ def accuracy(test=None, reference=None, confusion_matrix=None, **kwargs):
     tp, fp, tn, fn = confusion_matrix.get_matrix()
 
     return float((tp + tn) / (tp + fp + tn + fn))
-
-
-
-class FocalLoss(nn.Module):
-    def __init__(self, weight=None, size_average=True):
-        super(FocalLoss, self).__init__()
-
-    def forward(self, inputs: torch.Tensor, targets: torch.Tensor, alpha: float =0.8, gamma: int =2, smooth: int =1):
-        
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = torch.sigmoid(inputs)       
-        
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-        
-        #first compute binary cross-entropy 
-        BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
-        BCE_EXP = torch.exp(-BCE)
-        focal_loss = alpha * (1-BCE_EXP)**gamma * BCE
-                       
-        return focal_loss
-
-
 
 
 class AverageMeter():
