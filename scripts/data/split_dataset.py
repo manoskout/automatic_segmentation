@@ -31,7 +31,7 @@ def get_file_names(filenames, train, val, test):
     return train_names, val_names, test_names
 if __name__ == "__main__":
     np.random.seed(42)
-    root_dir = "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced" # data root path
+    root_dir = "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced" # data root path
     val_ratio = 0.1
     test_ratio = 0.2
     # for cls in classes_dir:
@@ -64,9 +64,9 @@ if __name__ == "__main__":
     print('Training: ', len(mask_train))
     print('Validation: ', len(mask_val))
     print('Testing: ', len(mask_test))
-    augment_data(img_train, mask_train, img_path, mask_path, "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\train", output_type="numpy", augment=False)
-    augment_data(img_test, mask_test, img_path, mask_path, "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\test", output_type="numpy", augment=False)
-    augment_data(img_val, mask_val, img_path, mask_path, "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\validation", output_type="numpy", augment=False)
+    augment_data(img_train, mask_train, img_path, mask_path, "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\train", output_type="numpy", augment=False)
+    augment_data(img_test, mask_test, img_path, mask_path, "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\test", output_type="numpy", augment=False)
+    augment_data(img_val, mask_val, img_path, mask_path, "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\validation", output_type="numpy", augment=False)
 
     # print("---------------------------------------------------------------------------------")
     # print("After augmentation..")

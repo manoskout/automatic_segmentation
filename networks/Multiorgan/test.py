@@ -213,7 +213,7 @@ if __name__ == '__main__':
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
     parser.add_argument("--smp", action="store_true", help="Use smp_library")
-
+    parser.add_argument("--strategy", type=str, default="2.5D", help="Training strategy (default: 2.5D), choices 2.5D, 2D")
     config = parser.parse_args()
     config.dropout = 0.
     # config.result_path = config.model_path

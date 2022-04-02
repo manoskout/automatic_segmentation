@@ -6,7 +6,7 @@ from sklearn.model_selection import KFold
 import torch
 from Multiorgan.multisolver import MultiSolver
 # from Binary.solver import Solver
-from loaders.data_loader import ImageFolder, get_loader
+from loaders.data_loader import ImageFolder, ImageFolder2_5D
 from torch.backends import cudnn
 import random
 from datetime import datetime
@@ -53,14 +53,24 @@ def main(config):
     if config.mode == 'train':
         # Define the K-fold Cross Validator
         kfold = KFold(n_splits=config.k_folds, shuffle=False)
-        dataset = ImageFolder(
-            root = config.train_path, 
-            image_size =config.image_size, 
-            mode=config.mode,
-            augmentation_prob=0.4, 
-            is_multiorgan=True, 
-            classes=classes
-            )
+        if config.strategy == "2D":
+            dataset = ImageFolder(
+                root = config.train_path, 
+                image_size =config.image_size, 
+                mode=config.mode,
+                augmentation_prob=0.4, 
+                is_multiorgan=True, 
+                classes=classes
+                )
+        elif config.strategy == "2_5D":
+            dataset = ImageFolder2_5D(
+                root = config.train_path, 
+                image_size =config.image_size, 
+                mode=config.mode,
+                augmentation_prob=0.4, 
+                is_multiorgan=True, 
+                classes=classes
+                )
 
         for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
             train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
@@ -105,9 +115,9 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, default='checkpoint.pkl')
     parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net_plus/DeepLabV3/DeepLabV3+/U_Net/R2U_Net/ResAttU_Net/AttU_Net/R2AttU_Net')
     parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net\\9_3_multiclass_200_4')
-    parser.add_argument('--train_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\train')
-    parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\validation')
-    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\test')
+    parser.add_argument('--train_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\train')
+    parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\validation')
+    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\test')
     parser.add_argument('--result_path', type=str, default='')
     parser.add_argument('--dropout', type=float, default=0., help="Set a dropout value in order to set a dropout layers into the model") 
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
@@ -121,6 +131,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument("--smp", action="store_true", help="Use smp_library")
+    parser.add_argument("--strategy", type=str, default="2_5D", help="Training strategy (default: 2_5D), choices 2.5D, 2D")
+
 
 
     config = parser.parse_args()
@@ -129,11 +141,11 @@ if __name__ == '__main__':
     
     
     if config.smp:
-        config.log_dir = f"./runs/{config.type}/{config.encoder_name}_{config.encoder_weights}_{day}_{month}_{config.model_type}_{config.num_epochs}_{config.batch_size}"
-        config.result_path=f'./result/{config.model_type}/{config.encoder_name}_{config.encoder_weights}_{day}_{month}_{config.type}_{config.num_epochs}_{config.batch_size}'
+        config.log_dir = f"./runs/{config.type}/{config.encoder_name}_{config.encoder_weights}_{day}_{month}_{config.model_type}_{config.num_epochs}_{config.batch_size}_{config.strategy}"
+        config.result_path=f'./result/{config.model_type}/{config.encoder_name}_{config.encoder_weights}_{day}_{month}_{config.type}_{config.num_epochs}_{config.batch_size}_{config.strategy}'
     else:
-        config.log_dir = f"./runs/{config.type}/{day}_{month}_{config.model_type}_{config.num_epochs}_{config.batch_size}"
-        config.result_path=f'./result/{config.model_type}/{day}_{month}_{config.type}_{config.num_epochs}_{config.batch_size}'
+        config.log_dir = f"./runs/{config.type}/{day}_{month}_{config.model_type}_{config.num_epochs}_{config.batch_size}_{config.strategy}"
+        config.result_path=f'./result/{config.model_type}/{day}_{month}_{config.type}_{config.num_epochs}_{config.batch_size}_{config.strategy}'
     try:
         main(config)
     except KeyboardInterrupt:

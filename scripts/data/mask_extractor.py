@@ -230,9 +230,12 @@ class MaskBuilder:
           self.mask_data[str(index)]["slice"] = slice
         else:
           del self.mask_data[str(index)]
-          
+  
 
-
+  def compose_grouped_slices(self, slices, masks):
+    for i in range(len(slices)-(self.step_splitter-1)):
+      yield masks[i:i+self.step_splitter], slices[i:i+self.step_splitter], i
+      
   def save_masks(self,patient_path,patient, save_type,result_path):
     # avg_value_of_classes = 255/len(self.OARS)
     mri_path = os.path.join(result_path,"mri")
@@ -256,26 +259,6 @@ class MaskBuilder:
         masks.append(mask) 
         slice = case["slice"]
         slices.append(slice.pixel_array)
-        if self.step_splitter is not None and split_counter%self.step_splitter==0:
-          if save_type == "nifti":
-            try:
-              self.save_as_nifti(
-                np.array(masks, dtype=np.uint8).transpose([2,1,0]),
-                patient+ str(split_counter)  +"_masks",
-                mask_path
-                )
-              self.save_as_nifti(
-                np.array(slices).transpose([2,1,0]),
-                patient+ str(split_counter),
-                mri_path
-                )
-              # print("All files saved succesfully.")
-            except ValueError:
-              print("Saved in : ", result_path)
-
-              pass
-          masks=[]
-          slices = []
         if save_type == "dicom":
           self.save_as_dicom(
             slice,
@@ -289,8 +272,26 @@ class MaskBuilder:
             index,
             mask_path
           )
-      
-      
+    if self.step_splitter and save_type == "nifti":
+      for msk, slc, img_index in self.compose_grouped_slices(slices, masks):
+        try:
+          self.save_as_nifti(
+            np.array(msk, dtype=np.uint8).transpose([2,1,0]),
+            patient+ str(img_index)  +"_masks",
+            mask_path
+            )
+          self.save_as_nifti(
+            np.array(slc).transpose([2,1,0]),
+            patient+ str(img_index),
+            mri_path
+            )
+          # print("All files saved succesfully.")
+        except ValueError:
+          print("Saved in : ", result_path)
+          pass
+      masks=[]
+      slices = []
+  
 
     
     
