@@ -46,21 +46,20 @@ if __name__ == "__main__":
     # Creating partitions of the data after shuffeling
     mask_path= os.path.join(root_dir,"mask")
     img_path = os.path.join(root_dir,"mri")
-    mask_filenames = os.listdir(mask_path)
     img_filenames = os.listdir(img_path)
     patient_numbers = list(set([patient[0:3] for patient in img_filenames]))
     # print(len(patient_numbers))
     patients_train, patients_val, patients_test = splitting(patient_numbers, val_ratio, test_ratio)
 
     # img_filenames,mask_filenames=both_shuffling(img_filenames,mask_filenames, image_type=".dcm",mask_type=".tiff")
-
-
+    
+    mask_filenames = [a[:-7] +"_masks" + a[-7:] for a in img_filenames]
     img_train, img_val, img_test = get_file_names(img_filenames, patients_train, patients_val, patients_test)
     mask_train, mask_val, mask_test = get_file_names(mask_filenames,patients_train, patients_val, patients_test)
-    print(img_test[0:5])
-    print(mask_test[0:5])    
+    # for i in range(50,100):
+    #     print(patients_test[i])    
 
-    print('Total images: ', len(mask_filenames))
+    print('Total images: ', len(img_filenames))
     print('Training: ', len(mask_train))
     print('Validation: ', len(mask_val))
     print('Testing: ', len(mask_test))
