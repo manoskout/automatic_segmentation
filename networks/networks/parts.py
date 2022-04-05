@@ -27,16 +27,25 @@ def init_weights(net, init_type='normal', gain=0.02):
     print('initialize network with %s' % init_type)
     net.apply(init_func)
 
+def init_normalization(norm_type, input_ch):
+    if norm_type == "batch":
+        return nn.BatchNorm2d(input_ch)
+    elif norm_type == "instance":
+        return nn.InstanceNorm2d(input_ch)
+    elif norm_type == "group":
+        # TODO -> Test also with bigger number of group
+        return nn.GroupNorm(num_groups= 8, num_channels=input_ch)
+
 
 class conv_block(nn.Module):
-    def __init__(self,ch_in : int,ch_out : int, dropout : float= 0.) -> None:
+    def __init__(self,ch_in : int,ch_out : int, dropout : float= 0., normalization: str = "batch" ) -> None:
         super(conv_block,self).__init__()
         layers = [
             nn.Conv2d(ch_in, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
-            nn.BatchNorm2d(ch_out),
+            init_normalization(normalization, ch_out),
             nn.ReLU(inplace=True),
             nn.Conv2d(ch_out, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
-            nn.BatchNorm2d(ch_out),
+            init_normalization(normalization, ch_out),
             nn.ReLU(inplace=True)
         ]
         if dropout != 0.:
@@ -50,12 +59,12 @@ class conv_block(nn.Module):
         return x
 
 class up_conv(nn.Module):
-    def __init__(self,ch_in: int,ch_out: int, dropout: float= 0.) -> None:
+    def __init__(self,ch_in: int,ch_out: int, dropout: float= 0., normalization: str = "batch") -> None:
         super(up_conv,self).__init__()
         layers = [
             nn.Upsample(mode="bilinear",scale_factor=2),
             nn.Conv2d(ch_in,ch_out,kernel_size=3,stride=1,padding=1,bias=True),
-		    nn.BatchNorm2d(ch_out),
+		    init_normalization(normalization, ch_out),
 			nn.ReLU(inplace=True)
         ]
         if dropout != 0.:
@@ -68,13 +77,13 @@ class up_conv(nn.Module):
         return x
 
 class Recurrent_block(nn.Module):
-    def __init__(self,ch_out : int,t: int = 2):
+    def __init__(self,ch_out : int,t: int = 2, normalization: str = "batch"):
         super(Recurrent_block,self).__init__()
         self.t = t
         self.ch_out = ch_out
         self.conv = nn.Sequential(
             nn.Conv2d(ch_out,ch_out,kernel_size=3,stride=1,padding=1,bias=True),
-		    nn.BatchNorm2d(ch_out),
+		    init_normalization(normalization, ch_out),
 			nn.ReLU(inplace=True)
         )
 
@@ -88,36 +97,39 @@ class Recurrent_block(nn.Module):
         return x1
 
 class Residual_block(nn.Module):
-    def __init__(self,ch_in: int, ch_out : int,t: int = 2):
+    def __init__(self,ch_in: int, ch_out : int,t: int = 2,dropout: float = 0., normalization: str = "batch"):
         super(Residual_block,self).__init__()
         self.t = t
         self.ch_out = ch_out
         self.conv1 = nn.Sequential(
             nn.Conv2d(ch_in,ch_out,kernel_size=3,stride=1,padding=1,bias=True),
-		    nn.BatchNorm2d(ch_out),
+		    init_normalization(normalization, ch_out),
 			nn.ReLU(inplace=True)
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(ch_out,ch_out,kernel_size=3,stride=1,padding=1,bias=True),
-		    nn.BatchNorm2d(ch_out),
+		    init_normalization(normalization, ch_out),
 			nn.ReLU(inplace=True)
         )
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self,x : torch.Tensor) -> torch.Tensor:
+
         for i in range(self.t):
             if i==0:
                 x = self.conv1(x)
-            
+            x = self.dropout(x)
             x1 = self.conv2(x)
         skip = x+x1
         return skip
         
 class RRCNN_block(nn.Module):
-    def __init__(self, ch_in : int, ch_out : int, t: int = 2):
+    def __init__(self, ch_in : int, ch_out : int, t: int = 2, normalization: str= "batch"):
         super(RRCNN_block,self).__init__()
         self.RCNN = nn.Sequential(
-            Recurrent_block(ch_out,t=t),
-            Recurrent_block(ch_out,t=t)
+            init_normalization(normalization, ch_out),
+            init_normalization(normalization, ch_out),
+
         )
         self.Conv_1x1 = nn.Conv2d(ch_in,ch_out,kernel_size=1,stride=1,padding=0)
 
@@ -127,30 +139,18 @@ class RRCNN_block(nn.Module):
         return x+x1
 
 
-class single_conv(nn.Module):
-    def __init__(self,ch_in: int, ch_out: int) -> None:
-        super(single_conv,self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(ch_in, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
-            nn.BatchNorm2d(ch_out),
-            nn.ReLU(inplace=True)
-        )
-
-    def forward(self,x : torch.Tensor) -> torch.Tensor:
-        x = self.conv(x)
-        return x
 
 class Attention_block(nn.Module):
-    def __init__(self, F_g: int, F_l: int, F_int: int) -> None:
+    def __init__(self, F_g: int, F_l: int, F_int: int, normalization: str = "batch") -> None:
         super(Attention_block,self).__init__()
         self.W_g = nn.Sequential(
             nn.Conv2d(F_g, F_int, kernel_size=1,stride=1,padding=0,bias=True),
-            nn.BatchNorm2d(F_int)
+            init_normalization(normalization, F_int),
             )
         
         self.W_x = nn.Sequential(
             nn.Conv2d(F_l, F_int, kernel_size=1,stride=1,padding=0,bias=True),
-            nn.BatchNorm2d(F_int)
+            init_normalization(normalization, F_int),
         )
 
         self.psi = nn.Sequential(

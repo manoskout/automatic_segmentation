@@ -3,6 +3,10 @@ from networks.network import U_Net,R2U_Net,AttU_Net,R2AttU_Net, ResAttU_Net
 from torch import optim
 import argparse
 import torch
+from torch import nn
+
+
+    
 def build_model(cfg: argparse.Namespace):
     """Build generator and discriminator."""
     unet = None
@@ -23,15 +27,15 @@ def build_model(cfg: argparse.Namespace):
                 classes=cfg.output_ch,         
             )
     elif cfg.model_type =='U_Net':
-        unet = U_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch, dropout=cfg.dropout)
+        unet = U_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch, dropout=cfg.dropout, normalization=cfg.norm)
     elif cfg.model_type =='R2U_Net':
         unet = R2U_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch,t=cfg.t)
     elif cfg.model_type =='AttU_Net':
-        unet = AttU_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch, dropout=cfg.dropout)
+        unet = AttU_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch, dropout=cfg.dropout, normalization=cfg.norm)
     elif cfg.model_type == 'R2AttU_Net':
         unet = R2AttU_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch,t=cfg.t)
     elif cfg.model_type == 'ResAttU_Net':
-        unet = ResAttU_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch,t=cfg.t)
+        unet = ResAttU_Net(img_ch=cfg.img_ch,output_ch=cfg.output_ch,t=cfg.t, normalization=cfg.norm)
         
     # cfg.grad_scaler = torch.cuda.amp.GradScaler(enabled=cfg.amp)
 

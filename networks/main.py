@@ -119,7 +119,9 @@ if __name__ == '__main__':
     parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\validation')
     parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\test')
     parser.add_argument('--result_path', type=str, default='')
-    parser.add_argument('--dropout', type=float, default=0., help="Set a dropout value in order to set a dropout layers into the model") 
+    parser.add_argument('--dropout', type=float, default=0., help="Set a dropout value in order to set a dropout layers into the model")
+    parser.add_argument('--norm', type=str, default='batch', help="Set an normalization method (Default: BatchNormalization),\n\t Available choices: \n\t batch: BatchNormalization, group: GroupNormalization, instance: InstanceNormalization")
+     
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
     parser.add_argument('--early_stopping', type=int, default=25, help="Set the early stopping `patience` variable")
@@ -144,8 +146,8 @@ if __name__ == '__main__':
         config.log_dir = f"./runs/{config.type}/{config.encoder_name}_{config.encoder_weights}_{day}_{month}_{config.model_type}_{config.num_epochs}_{config.batch_size}_{config.strategy}"
         config.result_path=f'./result/{config.model_type}/{config.encoder_name}_{config.encoder_weights}_{day}_{month}_{config.type}_{config.num_epochs}_{config.batch_size}_{config.strategy}'
     else:
-        config.log_dir = f"./runs/{config.type}/{day}_{month}_{config.model_type}_{config.num_epochs}_{config.batch_size}_{config.strategy}"
-        config.result_path=f'./result/{config.model_type}/{day}_{month}_{config.type}_{config.num_epochs}_{config.batch_size}_{config.strategy}'
+        config.log_dir = f"./runs/{config.type}/{day}_{month}_{config.model_type}_{config.num_epochs}_{config.batch_size}_{config.norm}_{config.strategy}"
+        config.result_path=f'./result/{config.model_type}/{day}_{month}_{config.type}_{config.num_epochs}_{config.batch_size}_{config.norm}_{config.strategy}'
     try:
         main(config)
     except KeyboardInterrupt:
