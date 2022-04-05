@@ -66,18 +66,18 @@ def save_validation_results(cfg,image,true_mask, pred_mask,counter, metric, clas
 
     plt.subplot(2,2,3)
     plt.title("Ground Truth")
-    plt.imshow(image,cmap="gray",interpolation='none')
+    plt.imshow(image[1],cmap="gray",interpolation='none')
     plt.imshow(true_mask,cmap="cool",interpolation='none', alpha = 0.5)
     plt.axis('off')
 
     plt.subplot(2,2,4)
     plt.title("Predicted")
-    plt.imshow(image,cmap="gray",interpolation='none')
+    plt.imshow(image[1],cmap="gray",interpolation='none')
     plt.imshow(pred_mask,cmap="cool",interpolation='none', alpha = 0.5)
     plt.axis('off')
     
 
-    # plt.show()
+    plt.show()
 
 def _update_metricRecords(writer, csv_writer, metric, mode="test", classes=None, img_num=1) -> None:	
     avg_metrics = [
@@ -200,13 +200,13 @@ if __name__ == '__main__':
     # parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net\\24_3_multiclass_200_4')
     # parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\test')
     # parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\metrics')
-    parser.add_argument('--model_name', type=str, default='resatt_checkpoint.pkl')
+    parser.add_argument('--model_name', type=str, default='2_5_resatt_checkpoint.pkl')
     parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
     parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\ResAttU_Net\\2_4_multiclass_200_4_2_5D')
     parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\test')
     parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\metrics')
 
-    parser.add_argument('--device', type=str, default="cuda")
+    parser.add_argument('--device', type=str, default="cpu")
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
