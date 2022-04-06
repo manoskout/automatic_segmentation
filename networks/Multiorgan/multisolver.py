@@ -37,7 +37,13 @@ class MultiSolver(object):
 		self.valid_loader = valid_loader
 		if config.type == "multiclass":
 			self.classes = classes
-			del self.classes[0] # Delete the background label
+			try: 
+				del self.classes[0] # Delete the background label
+			except IndexError:
+				print("Warning: there is no index 0 of the self.classes")
+				print(self.classes)
+				print("=====================PASS=====================")
+				pass
 		else:
 			classes = []
 		self.save_images = save_images

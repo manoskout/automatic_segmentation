@@ -3,6 +3,24 @@ from functools import partial
 import torch
 import torch.nn.functional as F
 from torch.nn.modules.loss import _Loss
+import numpy as np
+
+def to_tensor(x, dtype=None) -> torch.Tensor:
+    if isinstance(x, torch.Tensor):
+        if dtype is not None:
+            x = x.type(dtype)
+        return x
+    if isinstance(x, np.ndarray):
+        x = torch.from_numpy(x)
+        if dtype is not None:
+            x = x.type(dtype)
+        return x
+    if isinstance(x, (list, tuple)):
+        x = np.array(x)
+        x = torch.from_numpy(x)
+        if dtype is not None:
+            x = x.type(dtype)
+        return x
 
 def soft_dice_score(
     output: torch.Tensor,
@@ -48,7 +66,7 @@ class DiceLoss(_Loss):
         super(DiceLoss, self).__init__()
         self.mode = mode
         if classes is not None:
-            classes = torch.to_tensor(classes, dtype=torch.long)
+            classes = to_tensor(classes, dtype=torch.long)
 
         self.classes = classes
         self.from_logits = from_logits
@@ -181,7 +199,7 @@ class TverskyLoss(DiceLoss):
     def __init__(
         self,
         mode: str,
-        classes: List[int] = None,
+        classes: List[int]  = None,
         log_loss: bool = False,
         from_logits: bool = True,
         smooth: float = 0.0,
@@ -190,7 +208,8 @@ class TverskyLoss(DiceLoss):
         alpha: float = 0.5,
         beta: float = 0.5,
         gamma: float = 1.0,
-    ):
+    ):  
+        
 
         super().__init__(mode, classes, log_loss, from_logits, smooth, ignore_index, eps)
         self.alpha = alpha
