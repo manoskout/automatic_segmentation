@@ -65,7 +65,7 @@ class DiceLoss(_Loss):
         """
         super(DiceLoss, self).__init__()
         self.mode = mode
-        if classes is not None:
+        if classes is not None or classes != False:
             classes = to_tensor(classes, dtype=torch.long)
 
         self.classes = classes
@@ -159,7 +159,6 @@ def soft_tversky_score(
     eps: float = 1e-7,
     dims=None,
 ) -> torch.Tensor:
-    assert output.size() == target.size()
     if dims is not None:
         intersection = torch.sum(output * target, dim=dims)  # TP
         fp = torch.sum(output * (1.0 - target), dim=dims)
@@ -207,15 +206,15 @@ class TverskyLoss(DiceLoss):
         eps: float = 1e-7,
         alpha: float = 0.5,
         beta: float = 0.5,
-        gamma: float = 1.0,
+        gamma: float = 3.0,
     ):  
         
 
-        super().__init__(mode, classes, log_loss, from_logits, smooth, ignore_index, eps)
+        super().__init__(mode, classes, log_loss, from_logits, smooth, ignore_index)
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
-
+        self.eps = eps
     def aggregate_loss(self, loss):
         return loss.mean() ** self.gamma
 
