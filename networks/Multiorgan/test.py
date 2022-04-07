@@ -164,7 +164,7 @@ def test(cfg, unet_path,test_loader, testing_log):
         # print(f"\niou: {metrics.iou}, \ndice: {metrics.dice}, \nHD: {metrics.hd95}")
         _update_metricRecords(writer,wr_test,metrics, classes=cfg.classes, img_num=test_len-length)
 
-        save_validation_results(cfg,image[:,1,:,:],true_mask, pred_mask,length,metrics, cfg.classes)#pred_mask_1,pred_mask_2,pred_mask_3,length)
+        # save_validation_results(cfg,image[:,1,:,:],true_mask, pred_mask,length,metrics, cfg.classes)#pred_mask_1,pred_mask_2,pred_mask_3,length)
 
         length += image.size(0)/cfg.batch_size
         metrics.reset()
@@ -172,7 +172,7 @@ def average_performance(results_csv):
     df = pd.read_csv(results_csv)
     headers = df.columns.values 
 
-    splitted_headers = [list(headers[x:x+3]) for x in range(0, len(headers),3)]
+    splitted_headers = [list(headers[x:x+4]) for x in range(0, len(headers),4)]
 
     for organ, (iou,dice,hd, hd95) in zip(["overall", "RECTUM","VESSIE","FEM_D", "FEM_G"],splitted_headers):
         print(f"For {organ}:")
@@ -223,6 +223,7 @@ if __name__ == '__main__':
     # config.result_path = config.model_path
     unet_path = os.path.join(config.model_path, config.model_name)
     config.classes = class_mapping(config.classes)
+    config.norm = "batch"
     del config.classes[0] # Delete the background
     test_loader = get_loader(image_path=config.test_path,
                         image_size=config.image_size,
