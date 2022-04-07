@@ -230,6 +230,7 @@ class MaskBuilder:
           self.mask_data[str(index)]["slice"] = slice
         else:
           del self.mask_data[str(index)]
+    return None
   
 
   def compose_grouped_slices(self, slices, masks):
@@ -312,8 +313,8 @@ def main(config):
     clean_existed_masks(DATASET_PATH,"nifti")
     return 0
   PATIENT_FOLDERS = [patient for patient in get_patient_folder_list(DATASET_PATH)]
-  doubled_rt_structs=[]
-  patient_with_doubled_rt = []
+  print(PATIENT_FOLDERS)
+  not_investigated = []
   OARS = config.oars
   logging.info(f"Selected ROIS for extraction: {OARS}") if config.include_rt_struct else logging.info("No segments for extraction")
   for patient_path in PATIENT_FOLDERS:
@@ -333,29 +334,34 @@ def main(config):
     if not os.path.exists(output_path):
       os.mkdir(output_path)
     series,rt_struct = load_dcm_rt_from_path(mri_path,struct_path)
-    mb = MaskBuilder(DATASET_PATH,series, rt_struct, OARS = OARS, contours_only= config.contours_only, step_splitter=config.step_splitter)
+    mb = MaskBuilder(patient,DATASET_PATH,series, rt_struct, OARS = OARS, contours_only= config.contours_only, step_splitter=config.step_splitter)
     roi_names = mb.get_roi_names()
     logging.info(f"Available rois: {roi_names}") if config.include_rt_struct else print("\n")
-    mb.create_masks()
-    mb.save_masks(patient_path, patient, config.save_type, output_path)
-    mb.clean_mask_data()
+    investigated = mb.create_masks()
+    if investigated is None:
+      mb.save_masks(patient_path, patient, config.save_type, output_path)
+      mb.clean_mask_data()
+    else:
+      not_investigated.append(investigated)
     print("--------------------------------NEXT-------------------------------------")  
-  print("--->> Patients that are not yet investigated because of multiple rt_struct: {} \nStruct Path: ".format(patient_with_doubled_rt,doubled_rt_structs)) 
+  print("--->> Patients that are not yet investigated : {} \n".format(not_investigated)) 
     
 
 if __name__ =="__main__":
   parser = argparse.ArgumentParser(description="Automated conversion from dicom series and rt struct to nifti.")
   # "RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"
   # parser.add_argument("-d","--dataset-folder", type=str, default="C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset", help="The folder that contains all patients")
-  parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"], help="Provide the list with the organs that you want to segment, if the names are known")
-  parser.add_argument("--include_rt_struct", action="store_true", help="Create and nii file with mask. Only if the patient contains rt struct file")
-  parser.add_argument("-o", "--output_path", type=str, default= "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL", help="The output file is save into the patients folder by default")
+  # parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"], help="Provide the list with the organs that you want to segment, if the names are known")
+  parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","FÉMUR_DROIT","FÉMUR_GAUCHE"], help="Provide the list with the organs that you want to segment, if the names are known")
   
-  parser.add_argument("-d","--dataset-folder", type=str, default="C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL", help="The folder that contains all patients")
+  parser.add_argument("--include_rt_struct", action="store_true", help="Create and nii file with mask. Only if the patient contains rt struct file")
+  parser.add_argument("-o", "--output_path", type=str, default= "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\PRO_pCT_PARIS", help="The output file is save into the patients folder by default")
+  
+  parser.add_argument("-d","--dataset-folder", type=str, default="C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\PRO_pCT_PARIS", help="The folder that contains all patients")
 
   parser.add_argument("--contours_only", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
   parser.add_argument("--delete_nifti", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
-  parser.add_argument("--save_type", default="dicom", help="[nifti/dicom] Save the output as nifti (series of slice) or dicom (each slice seperately)")
+  parser.add_argument("--save_type", default="nifti", help="[nifti/dicom] Save the output as nifti (series of slice) or dicom (each slice seperately)")
   parser.add_argument("--step_splitter", type= int, default=1, help="Created nifti files with 3 slices per nifti (Used for 2.5D Architectures)")
   
   arguments= parser.parse_args()

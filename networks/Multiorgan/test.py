@@ -60,7 +60,7 @@ def save_validation_results(cfg,image,true_mask, pred_mask,counter, metric, clas
     plt.axis('off')
     table = plt.table(cellText=clust_data,colLabels=collabel,loc='center')
     table.set_fontsize(16)
-    table.scale(1.5, 1.5)  # may help
+    # table.scale(1.5, 1.5)  # may help
 
 
 
@@ -80,11 +80,11 @@ def save_validation_results(cfg,image,true_mask, pred_mask,counter, metric, clas
     plt.show()
 
 def _update_metricRecords(writer, csv_writer, metric, mode="test", classes=None, img_num=1) -> None:	
-    # avg_metrics = [
-    #             metric.all_precision, metric.all_recall, metric.all_sensitivity, 
-    #             metric.all_specificity, metric.all_dice, metric.all_iou,
-    #             metric.all_hd,metric.all_hd95
-    #         ]
+    avg_metrics = [
+                metric.all_precision, metric.all_recall, metric.all_sensitivity, 
+                metric.all_specificity, metric.all_dice, metric.all_iou,
+                metric.all_hd,metric.all_hd95
+            ]
     avg_metrics = [metric.all_dice, metric.all_iou, metric.all_hd95]
     if classes:
         for index in range(len(classes.items())):
@@ -159,7 +159,7 @@ def test(cfg, unet_path,test_loader, testing_log):
         # print(f"\niou: {metrics.iou}, \ndice: {metrics.dice}, \nHD: {metrics.hd95}")
         _update_metricRecords(writer,wr_test,metrics, classes=cfg.classes, img_num=test_len-length)
 
-        save_validation_results(cfg,image,true_mask, pred_mask,length,metrics, cfg.classes)#pred_mask_1,pred_mask_2,pred_mask_3,length)
+        save_validation_results(cfg,image[:,1,:,:],true_mask, pred_mask,length,metrics, cfg.classes)#pred_mask_1,pred_mask_2,pred_mask_3,length)
 
         length += image.size(0)/cfg.batch_size
         metrics.reset()
@@ -202,9 +202,9 @@ if __name__ == '__main__':
     # parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\metrics')
     parser.add_argument('--model_name', type=str, default='2_5_resatt_checkpoint.pkl')
     parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    parser.add_argument('--model_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set')
-    parser.add_argument('--test_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/test')
-    parser.add_argument('--result_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/test')
+    parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\ResAttU_Net\\2_4_multiclass_200_4_2_5D')
+    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\test')
+    parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\metrics')
 
     parser.add_argument('--device', type=str, default="cpu")
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
