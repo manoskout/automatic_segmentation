@@ -172,13 +172,15 @@ def average_performance(results_csv):
     df = pd.read_csv(results_csv)
     headers = df.columns.values 
 
-    splitted_headers = [list(headers[x:x+3]) for x in range(0, len(headers),3)]
+    splitted_headers = [list(headers[x:x+4]) for x in range(0, len(headers),4)]
 
     for organ, (iou,dice,hd, hd95) in zip(["overall", "RECTUM","VESSIE","FEM_D", "FEM_G"],splitted_headers):
         print(f"For {organ}:")
         dice_mean = df[dice].mean()
         iou_mean = df[iou].mean()
+        hd_mean = df[hd].mean()
         hd95_mean = df[hd95].mean()
+
         dice_std = df[dice].std()
         iou_std = df[iou].std()
         hd_std = df[hd].std()
@@ -206,11 +208,11 @@ if __name__ == '__main__':
     # parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net\\24_3_multiclass_200_4')
     # parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\test')
     # parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\metrics')
-    parser.add_argument('--model_name', type=str, default='diceLoss_2_5_resatt_checkpoint_2D.pkl')
+    parser.add_argument('--model_name', type=str, default='checkpoint.pkl')
     parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    parser.add_argument('--model_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/diceLoss_ResAttUnet_2_5D')
-    parser.add_argument('--test_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/test')
-    parser.add_argument('--result_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/test')
+    parser.add_argument('--model_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/focalLoss_ResAttUnet_2_5D')
+    parser.add_argument('--test_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/2_5test')
+    parser.add_argument('--result_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/2_5test')
 
     parser.add_argument('--device', type=str, default="cpu")
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
@@ -223,6 +225,7 @@ if __name__ == '__main__':
     # config.result_path = config.model_path
     unet_path = os.path.join(config.model_path, config.model_name)
     config.classes = class_mapping(config.classes)
+    config.norm = "batch"
     del config.classes[0] # Delete the background
     test_loader = get_loader(image_path=config.test_path,
                         image_size=config.image_size,
@@ -243,6 +246,6 @@ if __name__ == '__main__':
     )
     try:
         test(config,unet_path,test_loader,testing_log)
-        average_performance(results_csv)
+        # average_performance(results_csv)
     except KeyboardInterrupt:
         os._exit(1)
