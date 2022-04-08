@@ -71,7 +71,11 @@ def main(config):
                 is_multiorgan=True, 
                 classes=classes
                 )
-
+        if config.type == "multiclass":
+			classes = classes
+			del classes[0] # Delete the background label
+		else:
+			classes = []
         for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
             train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
             valid_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)

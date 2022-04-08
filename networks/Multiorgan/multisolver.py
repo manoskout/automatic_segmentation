@@ -35,11 +35,7 @@ class MultiSolver(object):
 
 		self.train_loader = train_loader
 		self.valid_loader = valid_loader
-		if config.type == "multiclass":
-			self.classes = classes
-			del self.classes[0] # Delete the background label
-		else:
-			classes = []
+
 		self.save_images = save_images
 		# Model
 		self.unet = None
