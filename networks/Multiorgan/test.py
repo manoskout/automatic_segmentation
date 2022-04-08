@@ -164,7 +164,7 @@ def test(cfg, unet_path,test_loader, testing_log):
         # print(f"\niou: {metrics.iou}, \ndice: {metrics.dice}, \nHD: {metrics.hd95}")
         _update_metricRecords(writer,wr_test,metrics, classes=cfg.classes, img_num=test_len-length)
 
-        save_validation_results(cfg,image[:,1,:,:],true_mask, pred_mask,length,metrics, cfg.classes)#pred_mask_1,pred_mask_2,pred_mask_3,length)
+        # save_validation_results(cfg,image[:,1,:,:],true_mask, pred_mask,length,metrics, cfg.classes)#pred_mask_1,pred_mask_2,pred_mask_3,length)
 
         length += image.size(0)/cfg.batch_size
         metrics.reset()
