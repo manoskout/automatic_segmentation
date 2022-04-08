@@ -40,62 +40,67 @@ def save_validation_results(cfg,image,true_mask, pred_mask,counter, metric, clas
         # print(f"For class {index}:\n")
         # print(f"IOU: {metric.iou[index]},\t Dice: {metric.dice[index]},\t HD95: {metric.hd95[index]}")
 
-    plt.subplot(2,1,1)
-    for index,organ in zip(range(len(classes.items())),["RECTUM","VESSIE","FEM_LEFT","FEM_RIGHT"]):
-        avg_metrics = []
-        avg_metrics.append(organ)
-        try:    
-            avg_metrics.append(metric.iou[index])
-            avg_metrics.append(metric.dice[index])
-            avg_metrics.append(metric.hd95[index])  
-        except IndexError:
-            print("IndexError")
-            avg_metrics.append(np.nan)
-            avg_metrics.append(np.nan)
-            avg_metrics.append(np.nan)
-        metr.append(avg_metrics)
-    clust_data = np.array(metr)
-    collabel=("Organs", "IOU", "Dice", "HD95")
-    plt.axis('tight')
-    plt.axis('off')
-    table = plt.table(cellText=clust_data,colLabels=collabel,loc='center')
-    table.set_fontsize(16)
-    # table.scale(1.5, 1.5)  # may help
+    # plt.subplot(2,1,1)
+    # for index,organ in zip(range(len(classes.items())),["RECTUM","VESSIE","FEM_LEFT","FEM_RIGHT"]):
+    #     avg_metrics = []
+    #     avg_metrics.append(organ)
+    #     # print(f"organ: {index}")
+    #     try:    
+    #         avg_metrics.append(metric.iou[index])
+    #         avg_metrics.append(metric.dice[index])
+    #         avg_metrics.append(metric.hd[index])  
+    #         avg_metrics.append(metric.hd95[index])  
+    #     except IndexError:
+    #         print("IndexError")
+    #         avg_metrics.append(np.nan)
+    #         avg_metrics.append(np.nan)
+    #         avg_metrics.append(np.nan)
+    #         avg_metrics.append(np.nan)
+    #     metr.append(avg_metrics)
+    # clust_data = np.array(metr)
+    # collabel=("Organs", "IOU", "Dice","HD", "HD95")
+    # plt.axis('tight')
+    # plt.axis('off')
+    # table = plt.table(cellText=clust_data,colLabels=collabel,loc='center')
+    # table.set_fontsize(16)
+    # # table.scale(1.5, 1.5)  # may help
 
 
 
-    plt.subplot(2,2,3)
-    plt.title("Ground Truth")
-    plt.imshow(image[1],cmap="gray",interpolation='none')
-    plt.imshow(true_mask,cmap="cool",interpolation='none', alpha = 0.5)
-    plt.axis('off')
+    # plt.subplot(2,2,3)
+    # plt.title("Ground Truth")
+    # plt.imshow(image[1],cmap="gray",interpolation='none')
+    # plt.imshow(true_mask,cmap="cool",interpolation='none', alpha = 0.5)
+    # plt.axis('off')
 
-    plt.subplot(2,2,4)
-    plt.title("Predicted")
-    plt.imshow(image[1],cmap="gray",interpolation='none')
-    plt.imshow(pred_mask,cmap="cool",interpolation='none', alpha = 0.5)
-    plt.axis('off')
+    # plt.subplot(2,2,4)
+    # plt.title("Predicted")
+    # plt.imshow(image[1],cmap="gray",interpolation='none')
+    # plt.imshow(pred_mask,cmap="cool",interpolation='none', alpha = 0.5)
+    # plt.axis('off')
     
 
-    plt.show()
+    # plt.show()
 
 def _update_metricRecords(writer, csv_writer, metric, mode="test", classes=None, img_num=1) -> None:	
-    avg_metrics = [
-                metric.all_precision, metric.all_recall, metric.all_sensitivity, 
-                metric.all_specificity, metric.all_dice, metric.all_iou,
-                metric.all_hd,metric.all_hd95
-            ]
-    avg_metrics = [metric.all_dice, metric.all_iou, metric.all_hd95]
+    # avg_metrics = [
+    #             metric.all_precision, metric.all_recall, metric.all_sensitivity, 
+    #             metric.all_specificity, metric.all_dice, metric.all_iou,
+    #             metric.all_hd,metric.all_hd95
+    #         ]
+    avg_metrics = [metric.all_iou, metric.all_dice, metric.all_hd, metric.all_hd95]
     if classes:
         for index in range(len(classes.items())):
             try:
                 
                 avg_metrics.append(metric.iou[index])
                 avg_metrics.append(metric.dice[index])
+                avg_metrics.append(metric.hd[index])
                 avg_metrics.append(metric.hd95[index])
                 
             except IndexError:
                 print("IndexError")
+                avg_metrics.append(np.nan)
                 avg_metrics.append(np.nan)
                 avg_metrics.append(np.nan)
                 avg_metrics.append(np.nan)
@@ -117,12 +122,12 @@ def _update_metricRecords(writer, csv_writer, metric, mode="test", classes=None,
 def test(cfg, unet_path,test_loader, testing_log):
     print(f"Metrics collector path: {testing_log}")
     wr_test = csv.writer(testing_log)
-    metric_list = ["iou","dice","hd95"] #["precision", "recall", "sensitivity", "specificity", "dice", "iou","hd","hd95"]
+    metric_list = ["iou","dice","hd","hd95"] #["precision", "recall", "sensitivity", "specificity", "dice", "iou","hd","hd95"]
     # metric_list = []
     if cfg.classes:
         # print(cfg.classes)
         for _,id in cfg.classes.items():
-            for i in ["iou","dice","hd95"]:
+            for i in ["iou","dice","hd","hd95"]:
                 metric_list.append(f"{id}_{i}")
     wr_test.writerow(metric_list)
 
@@ -159,7 +164,7 @@ def test(cfg, unet_path,test_loader, testing_log):
         # print(f"\niou: {metrics.iou}, \ndice: {metrics.dice}, \nHD: {metrics.hd95}")
         _update_metricRecords(writer,wr_test,metrics, classes=cfg.classes, img_num=test_len-length)
 
-        save_validation_results(cfg,image[:,1,:,:],true_mask, pred_mask,length,metrics, cfg.classes)#pred_mask_1,pred_mask_2,pred_mask_3,length)
+        # save_validation_results(cfg,image[:,1,:,:],true_mask, pred_mask,length,metrics, cfg.classes)#pred_mask_1,pred_mask_2,pred_mask_3,length)
 
         length += image.size(0)/cfg.batch_size
         metrics.reset()
@@ -167,18 +172,21 @@ def average_performance(results_csv):
     df = pd.read_csv(results_csv)
     headers = df.columns.values 
 
-    splitted_headers = [list(headers[x:x+3]) for x in range(0, len(headers),3)]
+    splitted_headers = [list(headers[x:x+4]) for x in range(0, len(headers),4)]
 
-    for organ, (iou,dice, hd95) in zip(["overall", "RECTUM","VESSIE","FEM_D", "FEM_G"],splitted_headers):
+    for organ, (iou,dice,hd, hd95) in zip(["overall", "RECTUM","VESSIE","FEM_D", "FEM_G"],splitted_headers):
         print(f"For {organ}:")
         dice_mean = df[dice].mean()
         iou_mean = df[iou].mean()
+        hd_mean = df[hd].mean()
         hd95_mean = df[hd95].mean()
+
         dice_std = df[dice].std()
         iou_std = df[iou].std()
+        hd_std = df[hd].std()
         hd95_std = df[hd95].std()
-        print(f"Mean Dice: {dice_mean}\tMean IoU: {iou_mean}\tMean HD95: {hd95_mean}")
-        print(f"STD Dice: {dice_std}\tSTD IoU: {iou_std}\tSTD HD95: {hd95_std}")
+        print(f"Mean Dice: {dice_mean}\tMean IoU: {iou_mean}\tMean HD: {hd_mean}\tMean HD95: {hd95_mean}")
+        print(f"STD Dice: {dice_std}\tSTD IoU: {iou_std}\tSTD HD: {hd_std}\tSTD HD95: {hd95_std}")
         print("\n------------------------------\n")
     # return results
 if __name__ == '__main__':
@@ -200,11 +208,11 @@ if __name__ == '__main__':
     # parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net\\24_3_multiclass_200_4')
     # parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\test')
     # parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\metrics')
-    parser.add_argument('--model_name', type=str, default='2_5_resatt_checkpoint.pkl')
+    parser.add_argument('--model_name', type=str, default='checkpoint.pkl')
     parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\ResAttU_Net\\2_4_multiclass_200_4_2_5D')
-    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\test')
-    parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\metrics')
+    parser.add_argument('--model_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/focalLoss_ResAttUnet_2_5D')
+    parser.add_argument('--test_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/2_5test')
+    parser.add_argument('--result_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/2_5test')
 
     parser.add_argument('--device', type=str, default="cpu")
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
@@ -217,6 +225,7 @@ if __name__ == '__main__':
     # config.result_path = config.model_path
     unet_path = os.path.join(config.model_path, config.model_name)
     config.classes = class_mapping(config.classes)
+    config.norm = "batch"
     del config.classes[0] # Delete the background
     test_loader = get_loader(image_path=config.test_path,
                         image_size=config.image_size,
@@ -237,6 +246,6 @@ if __name__ == '__main__':
     )
     try:
         test(config,unet_path,test_loader,testing_log)
-        average_performance(results_csv)
+        # average_performance(results_csv)
     except KeyboardInterrupt:
         os._exit(1)

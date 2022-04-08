@@ -100,7 +100,7 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
 
     # In our test 0 : background, 1: rectum, 2: vessie, 3: femoral_l, 4: femoral_r TODO-> get rid of the hardcoded method
     # print(f"Predicted before torch.where : {torch.unique(predicted)}")
-    predicted = torch.where(predicted>0.5,1,0).cpu().detach().numpy()
+    predicted = torch.where(predicted>0.1,1,0).cpu().detach().numpy()
     # print(np.unique(predicted))
     
     # print(f"Predicted after torch.where : {np.unique(predicted)}")
@@ -132,7 +132,20 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
         dice_c = []
         iou = []
         for item, id in classes.items():   
+
             class_truth = np.where(ground_truth==id, 1, 0)[:,0,:,:]
+            # print(f"For item : {item}, pred shape {predicted[:,id,:,:].shape}, gtr shape: {class_truth.shape}")
+            # import matplotlib.pyplot as plt
+            # plt.subplot(1,2,1)
+            # plt.title("Predicted")
+
+            # plt.imshow(predicted[:,id,:,:].squeeze())
+            # plt.subplot(1,2,2)
+            # plt.title("Ground Truth")
+            
+            # plt.imshow(class_truth.squeeze())
+
+            # plt.show()
             # print(f"{id}, organ: {item}")
             # print(f"Unique in ground truth {np.unique(class_truth)} .... shape : {class_truth.shape}")
             # print(f"Unique in predicted {np.unique(predicted[:,id,:,:])} .... shape : {predicted[:,id,:,:].shape}")

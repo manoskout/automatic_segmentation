@@ -35,7 +35,6 @@ class MultiSolver(object):
 
 		self.train_loader = train_loader
 		self.valid_loader = valid_loader
-
 		self.save_images = save_images
 		# Model
 		self.unet = None
