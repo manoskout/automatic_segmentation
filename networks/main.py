@@ -11,16 +11,16 @@ from torch.backends import cudnn
 import random
 from datetime import datetime
 def class_mapping(classes):
-	""" Maps the classes according to the pixel are shown into the mask
-	"""
-	mapping_dict={}
-	for index,i in enumerate(classes):
-		
-		if index == 0:
-			mapping_dict[0]= index
-		else:
-			mapping_dict[int(255/index)]= index
-	return mapping_dict
+    """ Maps the classes according to the pixel are shown into the mask
+    """
+    mapping_dict={}
+    for index,i in enumerate(classes):
+        
+        if index == 0:
+            mapping_dict[0]= index
+        else:
+            mapping_dict[int(255/index)]= index
+    return mapping_dict
 
 
 def main(config):
@@ -72,10 +72,10 @@ def main(config):
                 classes=classes
                 )
         if config.type == "multiclass":
-			classes = classes
-			del classes[0] # Delete the background label
-		else:
-			classes = []
+            classes = classes
+            del classes[0] # Delete the background label
+        else:
+            classes = []
         for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
             train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
             valid_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
@@ -105,9 +105,9 @@ if __name__ == '__main__':
     parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--t', type=int, default=3, help='t for Recurrent step of R2U_Net or R2AttU_Net')  
     # training hyper-parameters
-    parser.add_argument('--img_ch', type=int, default=1)
+    parser.add_argument('--img_ch', type=int, default=3)
     parser.add_argument('--output_ch', type=int, default=5)
-    parser.add_argument('--num_epochs', type=int, default=100)
+    parser.add_argument('--num_epochs', type=int, default=200)
     parser.add_argument('--num_epochs_decay', type=int, default=15)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--num_workers', type=int, default=4)
@@ -119,10 +119,10 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, default='checkpoint.pkl')
     parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net_plus/DeepLabV3/DeepLabV3+/U_Net/R2U_Net/ResAttU_Net/AttU_Net/R2AttU_Net')
     parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net\\9_3_multiclass_200_4')
-    parser.add_argument('--train_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\train')
-    parser.add_argument('--valid_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\validation')
-    parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced\\test')
-    parser.add_argument('--result_path', type=str, default='')
+    parser.add_argument('--train_path', type=str, default='/home/mkout/PRO_pCT_CGFL/2_5D_multiclass_imbalanced/train')
+    parser.add_argument('--valid_path', type=str, default='/home/mkout/PRO_pCT_CGFL/2_5D_multiclass_imbalanced/validation')
+    parser.add_argument('--test_path', type=str, default='/home/mkout/PRO_pCT_CGFL/2_5D_multiclass_imbalanced/test')
+    parser.add_argument('--result_path', type=str, default='/home/mkout/automatic_segmentation/networks/results')
     parser.add_argument('--dropout', type=float, default=0., help="Set a dropout value in order to set a dropout layers into the model")
     parser.add_argument('--norm', type=str, default='batch', help="Set an normalization method (Default: BatchNormalization),\n\t Available choices: \n\t batch: BatchNormalization, group: GroupNormalization, instance: InstanceNormalization")
      

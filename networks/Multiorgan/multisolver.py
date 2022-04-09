@@ -31,6 +31,8 @@ class MultiSolver(object):
 		self.result_path = config.result_path
 		self.mode = config.mode
 		self.log_dir = config.log_dir
+		self.classes = classes
+		print(f"Classes : {classes}")
 		# Data loader
 
 		self.train_loader = train_loader
