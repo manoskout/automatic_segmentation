@@ -31,21 +31,12 @@ class MultiSolver(object):
 		self.result_path = config.result_path
 		self.mode = config.mode
 		self.log_dir = config.log_dir
+		self.classes = classes
+		print(f"Classes : {classes}")
 		# Data loader
 
 		self.train_loader = train_loader
 		self.valid_loader = valid_loader
-		if config.type == "multiclass":
-			self.classes = classes
-			try: 
-				del self.classes[0] # Delete the background label
-			except IndexError:
-				print("Warning: there is no index 0 of the self.classes")
-				print(self.classes)
-				print("=====================PASS=====================")
-				pass
-		else:
-			classes = []
 		self.save_images = save_images
 		# Model
 		self.unet = None
