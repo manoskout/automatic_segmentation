@@ -48,7 +48,7 @@ class MultiSolver(object):
 		self.early_patience = config.early_stopping
 		# Using this loss we dont have to perform one_hot is already implemented inside the function
 		# self.criterion = torch.nn.CrossEntropyLoss()
-		self.criterion = TverskyLoss(mode=config.type)  
+		self.criterion = FocalLoss(mode=config.type, gamma=3)  
 		self.smp_enabled = config.smp
 		self.encoder_name = config.encoder_name
 		self.encoder_weights=config.encoder_weights		  
