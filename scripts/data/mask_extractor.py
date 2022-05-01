@@ -24,7 +24,7 @@ import argparse
 
 
 def get_patient_folder_list(dataset_path):
-    return sorted([os.path.join(dataset_path,folder) for folder in os.listdir(dataset_path) if "PRO_pCT_CGFL" in folder and ".zip" not in folder])
+    return sorted([os.path.join(dataset_path,folder) for folder in os.listdir(dataset_path) if "pCT_PARIS" in folder and ".zip" not in folder])
 
 def plot_img_mask(img_arr, msk_arr):
   """Plots the image and the exported mask
@@ -175,18 +175,17 @@ class MaskBuilder:
     # print(os.path.join(path, f'{patient}.nii.gz'))
     nib.save(res, os.path.join(path, f'{patient}.nii.gz'))
   
-  def save_as_tiff(self,array,patient,index, path):
+  def save_as_tiff(self,array,patient, path):
     """Save the array of images to a nifti.gz file"""
     im = Image.fromarray(array)
-    im.save("{}/{}_{}.tiff".format(
+    im.save("{}/{}.tiff".format(
         path,
-        patient,
-        index)
+        patient)
     )
   def save_as_dicom(self,slice,patient, index, path):
     """Save the array of images to a nifti.gz file"""
     dicom.dcmwrite(
-      "{}/{}_{}.dcm".format(
+      "{}/{}{}.dcm".format(
         path,
         patient,
         index), 
@@ -249,7 +248,7 @@ class MaskBuilder:
 
     masks=[]
     slices = []
-    split_counter = 0
+    split_counter = -2
     for num, (index,case) in enumerate(self.mask_data.items(),1):
       # print(num)
       mask= case["mask"] if "mask" in case.keys() and self.rt_struct else None
@@ -264,13 +263,13 @@ class MaskBuilder:
           self.save_as_dicom(
             slice,
             patient, 
-            index,
+            split_counter,
             mri_path
           )
+
           self.save_as_tiff(
             mask,
-            patient+"_mask",
-            index,
+            patient+str(split_counter)+"_masks",
             mask_path
           )
     if self.step_splitter and save_type == "nifti":
@@ -334,7 +333,7 @@ def main(config):
     if not os.path.exists(output_path):
       os.mkdir(output_path)
     series,rt_struct = load_dcm_rt_from_path(mri_path,struct_path)
-    mb = MaskBuilder(patient,DATASET_PATH,series, rt_struct, OARS = OARS, contours_only= config.contours_only, step_splitter=config.step_splitter)
+    mb = MaskBuilder(DATASET_PATH,series, rt_struct, OARS = OARS, contours_only= config.contours_only, step_splitter=config.step_splitter)
     roi_names = mb.get_roi_names()
     logging.info(f"Available rois: {roi_names}") if config.include_rt_struct else print("\n")
     investigated = mb.create_masks()
@@ -352,16 +351,15 @@ if __name__ =="__main__":
   # "RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"
   # parser.add_argument("-d","--dataset-folder", type=str, default="C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset", help="The folder that contains all patients")
   # parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"], help="Provide the list with the organs that you want to segment, if the names are known")
-  parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","FÉMUR_DROIT","FÉMUR_GAUCHE"], help="Provide the list with the organs that you want to segment, if the names are known")
-  
+  parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","FÉMUR_DROIT", "FÉMUR_GAUCHE"], help="Provide the list with the organs that you want to segment, if the names are known")
   parser.add_argument("--include_rt_struct", action="store_true", help="Create and nii file with mask. Only if the patient contains rt struct file")
-  parser.add_argument("-o", "--output_path", type=str, default= "C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\PRO_pCT_PARIS", help="The output file is save into the patients folder by default")
+  parser.add_argument("-o", "--output_path", type=str, default= "/Users/manoskoutoulakis/Desktop/test_set/dt", help="The output file is save into the patients folder by default")
   
-  parser.add_argument("-d","--dataset-folder", type=str, default="C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\PRO_pCT_PARIS", help="The folder that contains all patients")
+  parser.add_argument("-d","--dataset-folder", type=str, default="/Users/manoskoutoulakis/Desktop/test_set/dt", help="The folder that contains all patients")
 
   parser.add_argument("--contours_only", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
   parser.add_argument("--delete_nifti", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
-  parser.add_argument("--save_type", default="nifti", help="[nifti/dicom] Save the output as nifti (series of slice) or dicom (each slice seperately)")
+  parser.add_argument("--save_type", default="dicom", help="[nifti/dicom] Save the output as nifti (series of slice) or dicom (each slice seperately)")
   parser.add_argument("--step_splitter", type= int, default=1, help="Created nifti files with 3 slices per nifti (Used for 2.5D Architectures)")
   
   arguments= parser.parse_args()
