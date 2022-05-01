@@ -29,8 +29,10 @@ def init_weights(net, init_type='normal', gain=0.02):
 
 def init_normalization(norm_type, input_ch):
     if norm_type == "batch":
+        # print(f"Selected norm: {norm_type}")
         return nn.BatchNorm2d(input_ch)
     elif norm_type == "instance":
+        print(f"Selected norm: {norm_type}")
         return nn.InstanceNorm2d(input_ch)
     elif norm_type == "group":
         # TODO -> Test also with bigger number of group

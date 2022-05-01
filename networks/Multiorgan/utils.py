@@ -4,8 +4,8 @@ from torch import optim
 import argparse
 import torch
 from torch import nn
-
-
+from scipy.ndimage import binary_fill_holes
+import numpy as np
     
 def build_model(cfg: argparse.Namespace):
     """Build generator and discriminator."""
@@ -60,3 +60,19 @@ def classes_to_mask(cfg: argparse.Namespace, mask : torch.Tensor) -> torch.Tenso
         # prin0t(index,"ind : ",int(255/index)) if index != 0 else print(index,"ind : ","0")
         mask[mask==index] = int(255/index) if index != 0 else 0
     return mask.type(torch.float)
+
+#  POST - PROCESSING
+
+def hole_filling(im_in):
+    # print(im_in.shape)
+    im_in = im_in.cpu().squeeze().numpy()
+
+    for i,pred_class in enumerate(im_in[0]):    
+        if i == 2:
+            # Prevent the bladder from this process
+            continue
+        im_in[0][i] = binary_fill_holes(pred_class)
+    im_in = np.expand_dims(im_in,axis=0)
+    # print(im_in.shape)
+
+    return torch.from_numpy(im_in)

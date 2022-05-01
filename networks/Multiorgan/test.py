@@ -15,7 +15,7 @@ import argparse
 from loaders.data_loader import get_loader
 import segmentation_models_pytorch as smp
 import matplotlib.pyplot as plt
-from utils import classes_to_mask, class_mapping, build_model
+from utils import classes_to_mask, class_mapping, build_model, hole_filling
 import pandas as pd
 def save_validation_results(cfg,image,true_mask, pred_mask,counter, metric, classes):#pred_mask_1,pred_mask_2,pred_mask_3,counter = 0 ):
 
@@ -157,7 +157,11 @@ def test(cfg, unet_path,test_loader, testing_log):
         image = image.to(cfg.device)
         true_mask = true_mask.to(cfg.device)
         with torch.no_grad():
-            pred_mask = unet(image)
+            pred= unet(image)
+            pred = torch.softmax(pred, dim=1) > 0.4
+
+            pred_mask = hole_filling(pred)
+            
         
         
         metrics.update(0, true_mask, pred_mask, image.size(0), classes=cfg.classes) 
@@ -203,18 +207,13 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=4)
     # misc
     parser.add_argument('--mode', type=str, default='test')
-    # parser.add_argument('--model_name', type=str, default='ResAttU_Net-200-0.0010-15_0.pkl')
-    # parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    # parser.add_argument('--model_path', type=str, default='C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\networks\\result\\U_Net\\24_3_multiclass_200_4')
-    # parser.add_argument('--test_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\test')
-    # parser.add_argument('--result_path', type=str, default='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\multiclass_imbalanced\\metrics')
-    parser.add_argument('--model_name', type=str, default='checkpoint.pkl')
+    parser.add_argument('--model_name', type=str, default='checkpoint_2.pkl')
     parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    parser.add_argument('--model_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/focalLoss_ResAttUnet_2_5D')
-    parser.add_argument('--test_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/2_5test')
-    parser.add_argument('--result_path', type=str, default='/Users/manoskoutoulakis/Desktop/test_set/2_5test')
+    parser.add_argument('--model_path', type=str, default='/home/mkout/automatic_segmentation/networks/result/ResAttU_Net/18_4_multiclass_200_4_batch_2_5D')
+    parser.add_argument('--test_path', type=str, default='/home/mkout/PRO_pCT_CGFL/2_5D_multiclass_imbalanced/test')
+    parser.add_argument('--result_path', type=str, default='/home/mkout/automatic_segmentation/networks/result/ResAttU_Net/18_4_multiclass_200_4_batch_2_5D')
 
-    parser.add_argument('--device', type=str, default="cpu")
+    parser.add_argument('--device', type=str, default="cuda")
     parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
@@ -235,8 +234,8 @@ if __name__ == '__main__':
                         mode='test',
                         strategy=config.strategy)
     results_csv = os.path.join(
-            config.test_path,
-            'result_testing.csv'
+            config.result_path,
+            'result_testing_best_with_post.csv'
         )
     testing_log = open(
         results_csv, 
@@ -246,6 +245,6 @@ if __name__ == '__main__':
     )
     try:
         test(config,unet_path,test_loader,testing_log)
-        # average_performance(results_csv)
+        average_performance(results_csv)
     except KeyboardInterrupt:
         os._exit(1)

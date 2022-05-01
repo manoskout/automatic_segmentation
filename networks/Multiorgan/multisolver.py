@@ -8,7 +8,7 @@ import torchvision
 from torch import optim
 from utils_metrics import AverageMeter, EarlyStopping
 import segmentation_models_pytorch as smp 
-from networks.losses import DiceLoss, FocalLoss # , DualFocalloss : lathos apotelesmata
+from networks.losses import TverskyLoss, DiceLoss, FocalLoss # , DualFocalloss : lathos apotelesmata
 # from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
 from networks.network import U_Net,R2U_Net,AttU_Net,R2AttU_Net,ResAttU_Net
 import csv
@@ -31,6 +31,8 @@ class MultiSolver(object):
 		self.result_path = config.result_path
 		self.mode = config.mode
 		self.log_dir = config.log_dir
+		self.classes = classes
+		print(f"Classes : {classes}")
 		# Data loader
 
 		self.train_loader = train_loader
@@ -46,7 +48,7 @@ class MultiSolver(object):
 		self.early_patience = config.early_stopping
 		# Using this loss we dont have to perform one_hot is already implemented inside the function
 		# self.criterion = torch.nn.CrossEntropyLoss()
-		self.criterion = FocalLoss(mode=config.type, gamma=3) # TverskyLoss(mode=config.type, gamma= 3)  
+		self.criterion = FocalLoss(mode=config.type, gamma=3)  
 		self.smp_enabled = config.smp
 		self.encoder_name = config.encoder_name
 		self.encoder_weights=config.encoder_weights		  
