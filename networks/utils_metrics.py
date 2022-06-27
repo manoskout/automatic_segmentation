@@ -113,10 +113,11 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
         sensitivity_v = sensitivity(predicted,ground_truth)
         hausdorff_distance_v = hausdorff_distance(predicted,ground_truth)
         hausdorff_distance_95_v =hausdorff_distance_95(predicted,ground_truth)
+        avg_surface_distance_v = avg_surface_distance(predicted,ground_truth) 
         dice_c = dice(predicted,ground_truth)
         iou = jaccard(predicted,ground_truth)
 
-        return recall_v, precision_v, specificity_v,sensitivity_v, dice_c, iou ,hausdorff_distance_v, hausdorff_distance_95_v
+        return recall_v, precision_v, specificity_v,sensitivity_v, dice_c, iou ,hausdorff_distance_v, hausdorff_distance_95_v, avg_surface_distance_v
     else:
         # print(f"Unique in ground truth: {torch.unique(ground_truth.squeeze())}")
         # print(f"Unique in predicted: {predicted.shape}")
@@ -131,6 +132,7 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
         hausdorff_distance_95_v = []
         dice_c = []
         iou = []
+        avg_surface_distance_v = []
         for item, id in classes.items():   
 
             class_truth = np.where(ground_truth==id, 1, 0)[:,0,:,:]
@@ -161,18 +163,19 @@ def collect_metrics(ground_truth: Tensor, predicted: Tensor, classes: dict = Non
             # print(dice(predicted[:,id,:,:],class_truth))
             dice_c.append(dice(predicted[:,id,:,:],class_truth))
             iou.append(jaccard(predicted[:,id,:,:],class_truth))
+            avg_surface_distance_v.append(avg_surface_distance(predicted[:,id,:,:],class_truth))
             
         # print(precision_v, recall_v, specificity_v, sensitivity_v, hausdorff_distance_v, hausdorff_distance_95_v, dice_c, iou)
         return (
             np.array(recall_v), np.array(precision_v), np.array(specificity_v), 
             np.array(sensitivity_v),  np.array(dice_c), np.array(iou),
-            np.array(hausdorff_distance_v), np.array(hausdorff_distance_95_v)
+            np.array(hausdorff_distance_v), np.array(hausdorff_distance_95_v), np.array(avg_surface_distance_v)
         )
         
 
 
 
-def hausdorff_distance(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=True, voxel_spacing=None, connectivity=1, **kwargs):
+def hausdorff_distance(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=True, voxel_spacing=1.5, connectivity=1, **kwargs):
 
     if confusion_matrix is None:
         confusion_matrix = ConfusionMatrix(test, reference)
@@ -190,8 +193,26 @@ def hausdorff_distance(test=None, reference=None, confusion_matrix=None, nan_for
 
     return metric.hd(test, reference, voxel_spacing, connectivity)
 
+def avg_surface_distance(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=True, voxel_spacing=1.5, connectivity=1, **kwargs):
 
-def hausdorff_distance_95(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=True, voxel_spacing=None, connectivity=1, **kwargs):
+    if confusion_matrix is None:
+        confusion_matrix = ConfusionMatrix(test, reference)
+
+    test_empty, test_full, reference_empty, reference_full = confusion_matrix.get_existence()
+
+    if test_empty or test_full or reference_empty or reference_full:
+        if nan_for_nonexisting:
+            # https://github.com/MIC-DKFZ/nnUNet/issues/380
+            return float('NaN')
+        else:
+            return 0
+
+    test, reference = confusion_matrix.test, confusion_matrix.reference
+
+    return metric.asd(test, reference, voxel_spacing, connectivity)
+
+
+def hausdorff_distance_95(test=None, reference=None, confusion_matrix=None, nan_for_nonexisting=True, voxel_spacing=1.5, connectivity=1, **kwargs):
 
     if confusion_matrix is None:
         confusion_matrix = ConfusionMatrix(test, reference)
@@ -336,6 +357,7 @@ class AverageMeter():
         self.sensitivity = 0
         self.recall = 0
         self.precision = 0 
+        self.avg_surface_distance = 0
 
         self.sum_loss = 0
         self.sum_iou = 0
@@ -346,6 +368,7 @@ class AverageMeter():
         self.sum_sensitivity = 0
         self.sum_recall = 0
         self.sum_precision = 0
+        self.sum_asd =0 
 
         self.avg_loss = 0
         self.avg_iou = 0
@@ -356,6 +379,8 @@ class AverageMeter():
         self.avg_sensitivity = 0
         self.avg_recall = 0
         self.avg_precision = 0
+        self.avg_asd = 0
+
 
         self.count = 0
         
@@ -366,7 +391,7 @@ class AverageMeter():
         """
         # del classes[0]
 
-        recall, precision, specificity, sensitivity, dice, iou , hd, hd95 =  collect_metrics(true_mask,pred_mask, classes)
+        recall, precision, specificity, sensitivity, dice, iou , hd, hd95, as_distance =  collect_metrics(true_mask,pred_mask, classes)
         # print(dice)
         self.count += n
 
@@ -383,6 +408,7 @@ class AverageMeter():
         self.sensitivity = sensitivity
         self.recall = recall
         self.precision = precision
+        self.avg_surface_distance = as_distance
 
         
 
@@ -416,6 +442,8 @@ class AverageMeter():
             self.all_sensitivity = np.nanmean(self.sensitivity)
             self.all_recall = np.nanmean(self.recall)
             self.all_precision = np.nanmean(self.precision)
+            self.all_asd = np.nanmean(self.avg_surface_distance)
+
         else:
             # TODO -> make it more readable 
             self.all_iou = self.avg_iou
@@ -426,6 +454,8 @@ class AverageMeter():
             self.all_sensitivity = self.avg_sensitivity
             self.all_recall = self.avg_recall
             self.all_precision = self.avg_precision
+            self.all_asd = self.avg_avg_asd
+
         #print(f"n IOU: {self.iou}, of all classes: {self.all_iou}, Images :{self.count}, Sum: {self.sum_iou}, Avg: {self.avg_iou}")
         
 
