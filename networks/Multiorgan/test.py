@@ -266,7 +266,7 @@ if __name__ == '__main__':
     parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--t', type=int, default=3, help='t for Recurrent step of R2U_Net or R2AttU_Net')  
     # training hyper-parameters
-    parser.add_argument('--img_ch', type=int, default=3)
+    parser.add_argument('--img_ch', type=int, default=1)
     parser.add_argument('--output_ch', type=int, default=5)
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--num_workers', type=int, default=4)
@@ -284,7 +284,7 @@ if __name__ == '__main__':
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
     parser.add_argument("--smp", action="store_true", help="Use smp_library")
-    parser.add_argument("--strategy", type=str, default="2_5D", help="Training strategy (default: 2.5D), choices 2.5D, 2D")
+    parser.add_argument("--strategy", type=str, default="2D", help="Training strategy (default: 2.5D), choices 2.5D, 2D")
     config = parser.parse_args()
     config.dropout = 0.
     # config.result_path = config.model_path

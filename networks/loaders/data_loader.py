@@ -27,12 +27,12 @@ class ImageFolder(data.Dataset):
 		self.augmentation_prob = augmentation_prob
 		img_path = os.path.join(root,"image") 
 		self.GT_paths = os.path.join(root,"mask")
-		self.image_paths = list(
+		self.image_paths = sorted(list(
 			map(
 				lambda x: os.path.join(img_path,x),
 				os.listdir(img_path)
 			)
-		)
+		))
 		self.image_size = (image_size,image_size)
 		self.mode = mode
 
@@ -49,7 +49,7 @@ class ImageFolder(data.Dataset):
 		torch.manual_seed(seed)
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
-		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + 'mask.png') if self.mode != 'predict' else None
+		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + '_masks.tiff') if self.mode != 'predict' else None
 
 	
 		to_tensor = T.Compose([
@@ -143,12 +143,12 @@ class ImageFolder2_5D(data.Dataset):
 		self.augmentation_prob = augmentation_prob
 		img_path = os.path.join(root,"image") 
 		self.GT_paths = os.path.join(root,"mask")
-		self.image_paths = list(
+		self.image_paths = sorted(list(
 			map(
 				lambda x: os.path.join(img_path,x),
 				os.listdir(img_path)
 			)
-		)
+		))
 		self.image_size = (image_size,image_size)
 		self.mode = mode
 
@@ -165,7 +165,7 @@ class ImageFolder2_5D(data.Dataset):
 		torch.manual_seed(seed)
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
-		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + '.nii.gz') if self.mode != 'predict' else None
+		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] +"_masks"+ '.nii.gz') if self.mode != 'predict' else None
 
 	
 		to_tensor = T.Compose([
@@ -247,7 +247,7 @@ class ImageFolder2_5D(data.Dataset):
 		GT = to_tensor(GT)
 
 		
-		return image, GT.type(torch.long)
+		return image, GT.type(torch.long), filename
 
 	def __len__(self):
 		"""Returns the total number of font files."""
