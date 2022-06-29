@@ -158,15 +158,18 @@ class MaskBuilder:
     organ_ids={}
     if self.is_multiorgan:
         for seg in self.rt_struct.StructureSetROISequence:
-            prost = 0 
+            # prost = 0 
             for label,oar in enumerate(self.OARS,1):
-                if oar == "PROSTATE" and prost==0:
-                    prost+=1
+                if oar == "PROSTATE":
+                    # prost+=1
                     if seg.ROIName.upper() in AVAILABLE_PROSTATE_NAMES:
-                        print(f"Prostate --> dt name: {seg.ROIName.upper()} ")
                         organ_ids[oar]= {"id":int(seg.ROINumber)-1, "label":label}
-                    else:
-                        prost=0
+                elif oar == "TETE_FEMORALE_D":
+                    if seg.ROIName.upper() in AVAILABLE_FEMORAL_D_NAMES:
+                        organ_ids[oar]= {"id":int(seg.ROINumber)-1, "label":label}
+                elif oar == "TETE_FEMORALE_G":
+                  if seg.ROIName.upper() in AVAILABLE_FEMORAL_G_NAMES:
+                        organ_ids[oar]= {"id":int(seg.ROINumber)-1, "label":label}
                 elif oar == seg.ROIName.upper():
                     organ_ids[oar]= {"id":int(seg.ROINumber)-1, "label":label}
     else:
@@ -315,7 +318,6 @@ def main(config):
     clean_existed_masks(DATASET_PATH,"nifti")
     return 0
   PATIENT_FOLDERS = [patient for patient in get_patient_folder_list(DATASET_PATH) if ".DS_Store" not in patient]
-  print("EEE --> ",PATIENT_FOLDERS)
   not_investigated = []
   OARS = config.oars
   logging.info(f"Selected ROIS for extraction: {OARS}") if config.include_rt_struct else logging.info("No segments for extraction")
@@ -351,14 +353,18 @@ def main(config):
 
 if __name__ =="__main__":
   # FOR PR Dataset ["CTV_38_GY", "CTV2","CTV"]
+
+  AVAILABLE_FEMORAL_G_NAMES = ["FÉMUR_GAUCHE","TETE_FEMORALE_G"] 
+  AVAILABLE_FEMORAL_D_NAMES = ["FÉMUR_DROIT","TETE_FEMORALE_D"]
+
   AVAILABLE_PROSTATE_NAMES = [
-    # "CTV Prostate"
+    "CTV PROSTATE",
     # "CTV_prostate"
-    "CTV prostate",
-    "CTVaria",
+    "CTVARIA",
     "CTV_JB",
-    "CTV_EM",
+    "CTV_EMxs",
     "CTV1_MQ",
+    "CTV2",
     "CTV_PROSTATE_EM",
     "CTV_PROSTATE_BAS",
     "CTV","CTV_MQ",
@@ -368,12 +374,11 @@ if __name__ =="__main__":
     "CTV_PROSTATE_38_",
     "CTV_PROSTATE_38",
     "PROSTATE",
-    "CTV_PROSTATE_MQ"
+    "CTV_PROSTATE_MQ",
+    "CTV_38_GY",
+    "CTV_EM" # 17 , 20, 21, 22, 27
     ]
-  # AVAILABLE_VESSIE_NAMES = 
-  # AVAILABLE_RECTUM_NAMES = ["RECTUM"]
-  # AVAILABLE_FEMORAL_G_NAMES = [""]
-  # AVAILABLE_FEMORAL_D_NAMES = 
+# Remove 75, 48
   
   parser = argparse.ArgumentParser(description="Automated conversion from dicom series and rt struct to nifti.")
   # "RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G"
@@ -381,9 +386,9 @@ if __name__ =="__main__":
   parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","TETE_FEMORALE_D","TETE_FEMORALE_G","PROSTATE"], help="Provide the list with the organs that you want to segment, if the names are known")
   # parser.add_argument("--oars", nargs="+", default=["RECTUM","VESSIE","FÉMUR_DROIT", "FÉMUR_GAUCHE"], help="Provide the list with the organs that you want to segment, if the names are known")
   parser.add_argument("--include_rt_struct", action="store_true", help="Create and nii file with mask. Only if the patient contains rt struct file")
-  parser.add_argument("-o", "--output_path", type=str, default= "/Users/manoskoutoulakis/Desktop/ext_res", help="The output file is save into the patients folder by default")
+  parser.add_argument("-o", "--output_path", type=str, default= "/home/mkout/data", help="The output file is save into the patients folder by default")
   
-  parser.add_argument("-d","--dataset-folder", type=str, default="/Users/manoskoutoulakis/Desktop/dataset", help="The folder that contains all patients")
+  parser.add_argument("-d","--dataset-folder", type=str, default="/home/mkout/Dataset", help="The folder that contains all patients")
 
   parser.add_argument("--contours_only", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")
   parser.add_argument("--delete_nifti", action="store_true", help="Saves only the masks that contains only the slices according to the rt structure")

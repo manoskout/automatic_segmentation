@@ -59,7 +59,7 @@ def augment_data(images, masks, existed_imgs, existed_masks, save_path, output_t
 
         uid = os.path.basename(x)
         for index,(i, m) in enumerate(zip(X, Y)):
-            print("image: ", os.path.basename(i), "  ,  mask", os.path.basename(m))
+            # print("image: ", os.path.basename(i), "  ,  mask", os.path.basename(m))
             if output_type == "numpy":
                 tmp_image_name = f"{uid}"
                 tmp_mask_name = f"{uid}"

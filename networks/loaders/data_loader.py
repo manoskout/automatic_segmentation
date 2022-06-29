@@ -49,7 +49,7 @@ class ImageFolder(data.Dataset):
 		torch.manual_seed(seed)
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
-		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + '_masks.tiff') if self.mode != 'predict' else None
+		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + '.tiff') if self.mode != 'predict' else None
 
 	
 		to_tensor = T.Compose([
@@ -165,7 +165,7 @@ class ImageFolder2_5D(data.Dataset):
 		torch.manual_seed(seed)
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
-		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] +"_masks"+ '.nii.gz') if self.mode != 'predict' else None
+		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + '.nii.gz') if self.mode != 'predict' else None
 
 	
 		to_tensor = T.Compose([
@@ -247,7 +247,7 @@ class ImageFolder2_5D(data.Dataset):
 		GT = to_tensor(GT)
 
 		
-		return image, GT.type(torch.long), filename
+		return image, GT.type(torch.long)
 
 	def __len__(self):
 		"""Returns the total number of font files."""
