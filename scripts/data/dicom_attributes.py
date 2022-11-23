@@ -1,6 +1,9 @@
 import pydicom as dicom
 import os
-
+"""
+DEPRECATED
+It used just ones after N4 bias field correction because I lost all the dicom infos
+"""
 def load_dicom(mri):
     return dicom.dcmread(mri)
 

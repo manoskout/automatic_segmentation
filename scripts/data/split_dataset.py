@@ -11,7 +11,7 @@ import uuid
 # classes_dir = ['good', 'bad'] #total labels
 
 
-def both_shuffling(image_files, mask_files, image_type= "dcm.png",mask_type="mask.png",):
+def both_shuffling(patient_name, image_type= ".png",mask_type=".png",):
     img = sorted([i for i in image_files if image_type in i and "."!=i[0]])
     masks = sorted([i for i in mask_files if mask_type in i and "."!=i[0]])
     combined = list(zip(img,masks))
@@ -24,43 +24,51 @@ def splitting(filenames,val_ratio, test_ratio):
                                                           [int(len(filenames)* (1 - (val_ratio + test_ratio))), 
                                                            int(len(filenames)* (1 - test_ratio))])
     return train,val,test
-
+def get_file_names(filenames, train, val, test):
+    train_names= [image for image in filenames if image[0:3] in train]
+    val_names= [image for image in filenames if image[0:3] in val]
+    test_names = [image for image in filenames if image[0:3] in test]
+    return train_names, val_names, test_names
 if __name__ == "__main__":
     np.random.seed(42)
-    root_dir = "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM" # data root path
-    organ = "RECTUM"
-    val_ratio = 0.2
+    root_dir = "/home/mkout/data" # data root path
+    val_ratio = 0.1
     test_ratio = 0.2
     # for cls in classes_dir:
     # Check about the classes
     if not os.path.exists(root_dir +'\\train'):
         os.makedirs(root_dir +'\\train')
-        os.makedirs(root_dir +'\\validation')
+        # os.makedirs(root_dir +'\\validation')
         os.makedirs(root_dir +'\\test')
 
         
 
     # Creating partitions of the data after shuffeling
-    mask_path= os.path.join(root_dir,"MASK")
-    img_path = os.path.join(root_dir,"MRI")
-    mask_filenames = os.listdir(mask_path)
+    mask_path= os.path.join(root_dir,"mask")
+    img_path = os.path.join(root_dir,"mri")
     img_filenames = os.listdir(img_path)
-    img_filenames,mask_filenames=both_shuffling(img_filenames,mask_filenames, image_type=".dcm",mask_type="mask.png")
+    patient_numbers = list(set([patient[0:3] for patient in img_filenames]))
+    # print(len(patient_numbers))
+    patients_train, patients_val, patients_test = splitting(patient_numbers, val_ratio, test_ratio)
 
+    # img_filenames,mask_filenames=both_shuffling(img_filenames,mask_filenames, image_type=".dcm",mask_type=".tiff")
+    
+    mask_filenames = [a[:-7] +"_masks" + a[-7:] for a in img_filenames]
+    img_train, img_val, img_test = get_file_names(img_filenames, patients_train, patients_val, patients_test)
+    mask_train, mask_val, mask_test = get_file_names(mask_filenames,patients_train, patients_val, patients_test)
+    # for i in range(50,100):
+    #     print(patients_test[i])    
 
-    img_train, img_val, img_test = splitting(img_filenames,val_ratio, test_ratio)
-    mask_train, mask_val, mask_test = splitting(mask_filenames,val_ratio, test_ratio)
-
-    print('Total images: ', len(mask_filenames))
+    print('Total images: ', len(img_filenames))
     print('Training: ', len(mask_train))
     print('Validation: ', len(mask_val))
     print('Testing: ', len(mask_test))
-    augment_data(img_train, mask_train, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\train", output_type="numpy", size= (512,512), augment=False)
-    augment_data(img_test, mask_test, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\test", output_type="numpy", size= (512,512), augment=False)
-    augment_data(img_val, mask_val, img_path, mask_path, "C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\validation", output_type="numpy", size= (512,512), augment=False)
+    augment_data(img_train, mask_train, img_path, mask_path, "/home/mkout/data/train", output_type="numpy", augment=False)
+    augment_data(img_test, mask_test, img_path, mask_path, "/home/mkout/data/test", output_type="numpy", augment=False)
+    augment_data(img_val, mask_val, img_path, mask_path, "/home/mkout/data/validation", output_type="numpy", augment=False)
 
-    print("---------------------------------------------------------------------------------")
-    print("After augmentation..")
-    print('Training: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\train\\image")))
-    print('Validation: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\validation\\image")))
-    print('Testing: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\RECTUM\\test\\image")))
+    # print("---------------------------------------------------------------------------------")
+    # print("After augmentation..")
+    # print('Training: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\train\\image")))
+    # print('Validation: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\validation\\image")))
+    # print('Testing: ', len(os.listdir("C:\\Users\\ek779475\\Documents\\Koutoulakis\\automatic_segmentation\\Dataset\\multiclass\\test\\image")))

@@ -23,7 +23,7 @@ def load_data(path):
 
     return (train_x, train_y), (test_x, test_y)
 
-def augment_data(images, masks, existed_imgs, existed_masks, save_path, size= (512,512), output_type ="numpy", augment=True):
+def augment_data(images, masks, existed_imgs, existed_masks, save_path, output_type ="numpy", augment=True):
     create_dir(os.path.join(save_path,"image"))
     create_dir(os.path.join(save_path,"mask"))
 
@@ -34,14 +34,14 @@ def augment_data(images, masks, existed_imgs, existed_masks, save_path, size= (5
         """ Reading image and mask """
         if output_type== "numpy":
             x = os.path.join(existed_imgs,x)
-            y = imageio.mimread(os.path.join(existed_masks,y))[0]
+            y = os.path.join(existed_masks,y)
         else:
             x = cv2.imread(os.path.join(existed_imgs,x), cv2.IMREAD_COLOR)
             # x = dicom.dcmread(x).pixel_array
             y = imageio.mimread(os.path.join(existed_masks,y))[0]
 
         if augment == True:
-            aug = VerticalFlip(p=0.5)
+            aug = VerticalFlip(p=0.25)
             augmented = aug(image=x, mask=y)
             x2 = augmented["image"]
             y2 = augmented["mask"]
@@ -57,15 +57,17 @@ def augment_data(images, masks, existed_imgs, existed_masks, save_path, size= (5
             X = [x]
             Y = [y]
 
-        uid =  str(uuid.uuid4())[0:12]
+        uid = os.path.basename(x)
         for index,(i, m) in enumerate(zip(X, Y)):
+            # print("image: ", os.path.basename(i), "  ,  mask", os.path.basename(m))
             if output_type == "numpy":
-                tmp_image_name = f"{uid}_{index}.dcm"
-                tmp_mask_name = f"{uid}_{index}mask.png"
+                tmp_image_name = f"{uid}"
+                tmp_mask_name = f"{uid}"
                 image_path = os.path.join(save_path, "image", tmp_image_name)
                 mask_path = os.path.join(save_path, "mask", tmp_mask_name)
                 shutil.copy(i, image_path)
-                cv2.imwrite(mask_path, m)
+                shutil.copy(m, mask_path)
+
             else:      
                 tmp_image_name = f"{uid}_{index}.png"
                 tmp_mask_name = f"{uid}_{index}mask.png"
