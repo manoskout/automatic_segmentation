@@ -3,7 +3,6 @@ from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from torch.autograd import Variable
 from medpy import metric
 import math
 def assert_shape(test, reference):
