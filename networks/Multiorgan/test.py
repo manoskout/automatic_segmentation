@@ -176,7 +176,7 @@ def _update_metricRecords(writer, csv_writer, metric, mode="test", classes=None,
 #===================================== Test ====================================#
 def test(cfg, unet_path,test_loader, testing_log):
     print(f"Metrics collector path: {testing_log}")
-    wr_test = csv.writer(testing_log)
+    wr_test = csv.writer(testing_log, quoting=csv.QUOTE_NONNUMERIC)
     metric_list = ["iou","dice","hd","hd95", "asd"] #["precision", "recall", "sensitivity", "specificity", "dice", "iou","hd","hd95"]
     # metric_list = []
     if cfg.classes:
@@ -216,7 +216,7 @@ def test(cfg, unet_path,test_loader, testing_log):
             # print("Pred shape: ",pred.shape)
             # print("Post shape: ",post_pred.shape)
 
-            pred = torch.softmax(pred, dim=1) > 0.6
+            pred = torch.softmax(pred, dim=1) > 0.5
             # print("After soft pred shape: ",pred.shape)
 
             # pred_mask = hole_filling(pred)
@@ -228,7 +228,7 @@ def test(cfg, unet_path,test_loader, testing_log):
         
         metrics.update(0, true_mask, pred, image.size(0), classes=cfg.classes) 
         # print(f"\niou: {metrics.iou}, \ndice: {metrics.dice}, \nHD: {metrics.hd95}")
-        _update_metricRecords(writer,wr_test,metrics, classes=cfg.classes, img_num=test_len-length)
+        _update_metricRecords(writer,wr_test, metrics, classes=cfg.classes, img_num=test_len-length)
 
         # save_validation_results(cfg,image[:,1,:,:],true_mask, pred_mask,length,metrics, cfg.classes)#pred_mask_1,pred_mask_2,pred_mask_3,length)
 
@@ -239,9 +239,28 @@ def average_performance(results_csv):
     headers = df.columns.values 
 
     splitted_headers = [list(headers[x:x+5]) for x in range(0, len(headers),5)]
-
-    for organ, (iou,dice,hd, hd95,asd) in zip(["overall", "RECTUM","VESSIE","FEM_D", "FEM_G"],splitted_headers):
+    print("SPLITTED HEADERS",splitted_headers)
+    for organ, mtr in zip(["overall", "RECTUM","VESSIE","FEM_D", "FEM_G", "PROSTATE"],splitted_headers):
         print(f"For {organ}:")
+        iou = None
+        asd = None
+        hd = None
+        hd95 = None
+        dice = None
+
+        for i in mtr:
+            if "iou" in i:
+                iou = i
+            elif "asd" in i:
+                asd = i
+            elif "dice" in i:
+                dice = i
+            elif "hd95" in i :
+                hd95= i
+            elif "hd" in i and "95" not in i:
+                hd = i
+        
+        print("NAMES",iou,dice,hd, hd95,asd)
         dice_mean = df[dice].mean()
         iou_mean = df[iou].mean()
         hd_mean = df[hd].mean()
@@ -266,25 +285,25 @@ if __name__ == '__main__':
     parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--t', type=int, default=3, help='t for Recurrent step of R2U_Net or R2AttU_Net')  
     # training hyper-parameters
-    parser.add_argument('--img_ch', type=int, default=1)
-    parser.add_argument('--output_ch', type=int, default=5)
+    parser.add_argument('--img_ch', type=int, default=3)
+    parser.add_argument('--output_ch', type=int, default=6)
     parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--num_workers', type=int, default=2)
     # misc
     parser.add_argument('--mode', type=str, default='test')
-    parser.add_argument('--model_name', type=str, default='AttU_Net-200-0.0010-15_4.pkl')#U_Net-200-0.0010-15_1.pkl')
-    parser.add_argument('--model_type', type=str, default='AttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
+    parser.add_argument('--model_name', type=str, default='ResAttU_Net-200-0.0010-15_4.pkl')#U_Net-200-0.0010-15_1.pkl')
+    parser.add_argument('--model_type', type=str, default='ResAttU_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
     #parser.add_argument('--model_path', type=str, default='/home/mkout/automatic_segmentation/networks/result/U_Net/7_5_multiclass_200_4_batch_2_5D')
-    parser.add_argument('--model_path', type=str, default='/home/mkout/automatic_segmentation/networks/result/AttU_Net/16_5_multiclass_200_4_batch_2_5D')
-    parser.add_argument('--test_path', type=str, default='/home/mkout/PRO_pCT_CGFL/2_5D_multiclass_imbalanced/test')
-    parser.add_argument('--result_path', type=str, default='/home/mkout/automatic_segmentation/networks/result/AttU_Net/16_5_multiclass_200_4_batch_2_5D')
+    parser.add_argument('--model_path', type=str, default='/home/mkout/automatic_segmentation/networks/result/ResAttU_Net/28_6_multiclass_200_4_batch_2_5D')
+    parser.add_argument('--test_path', type=str, default='/home/mkout/data/test')
+    parser.add_argument('--result_path', type=str, default='/home/mkout/automatic_segmentation/networks/result/ResAttU_Net/28_6_multiclass_200_4_batch_2_5D')
 
     parser.add_argument('--device', type=str, default="cuda")
-    parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G"], help="Be sure the you specified the classes to the exact order")
+    parser.add_argument('--classes', nargs="+", default=["BACKGROUND","RECTUM","VESSIE","TETE_FEMORALE_D", "TETE_FEMORALE_G", "PROSTATE"], help="Be sure the you specified the classes to the exact order")
     parser.add_argument('--encoder_name', type=str, default='resnet152', help="Set an encoder (It works only in UNet, UNet++, DeepLabV3, and DeepLab+V3)")
     parser.add_argument('--encoder_weights', type=str, default=None, help="Pretrained weight, default: Random Init")
     parser.add_argument("--smp", action="store_true", help="Use smp_library")
-    parser.add_argument("--strategy", type=str, default="2D", help="Training strategy (default: 2.5D), choices 2.5D, 2D")
+    parser.add_argument("--strategy", type=str, default="2_5D", help="Training strategy (default: 2.5D), choices 2.5D, 2D")
     config = parser.parse_args()
     config.dropout = 0.
     # config.result_path = config.model_path
