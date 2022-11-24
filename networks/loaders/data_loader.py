@@ -49,7 +49,8 @@ class ImageFolder(data.Dataset):
 		torch.manual_seed(seed)
 		image_path = self.image_paths[index]
 		filename = os.path.basename(image_path)
-		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + '.tiff') if self.mode != 'predict' else None
+		# GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + '.tiff') if self.mode != 'predict' else None
+		GT_path = os.path.join(self.GT_paths, filename.split(".")[0] + '.nii.gz') if self.mode != 'predict' else None
 
 	
 		to_tensor = T.Compose([
@@ -60,30 +61,10 @@ class ImageFolder(data.Dataset):
 			A.Affine(p=self.augmentation_prob, scale=(0.9, 1.2)),
 			# A.VerticalFlip(p=self.augmentation_prob), # Possibility to cause problems with the rectum and bladder
 		])
-		# This transform is only used for the MRI
-		# affine = tio.Compose([
-		# 	tio.RandomAffine(
-		# 		p=self.augmentation_prob,
-		# 		scales=(0.9, 1.2),
-
-    	# 		degrees=5,
-		# 	)
-		# ])
-		# random_bias = tio.Compose([
-		# 	## Make the training set hard and there is a huge different between the training loss and validation loss
-		# 	# tio.RandomElasticDeformation(   
-		# 	# 	num_control_points=7,  # or just 7
-    	# 	# 	locked_borders=2,),
-			
-		# 	tio.RandomBiasField(p=self.augmentation_prob),
-			
-		# ])
 
 
-
-
-		image_file = dicom.dcmread(image_path)
-		image = image_file.pixel_array
+		image_file = nib.load(image_path)
+		image = image_file.get_data().transpose(2,1,0).squeeze()
 		image = limiting_filter(image,threshold=10,display=False)
 		image = image/np.max(image)
 		# Check the min max normalization 
@@ -93,8 +74,10 @@ class ImageFolder(data.Dataset):
 		if self.mode =='predict':
 			# image = np.expand_dims(image, axis=-1)
 			return to_tensor(image)
-			
-		GT = cv.imread(GT_path, cv.IMREAD_GRAYSCALE)
+
+		GT = nib.load(GT_path)
+		GT = GT.get_data()
+		GT = GT.squeeze().transpose(1,0)
 		GT =crop_and_pad(GT, self.image_size)
 
 		if not self.is_multiorgan:
@@ -124,8 +107,7 @@ class ImageFolder(data.Dataset):
 		# else:
 		image = to_tensor(image)
 		GT = to_tensor(GT)
-		
-		
+	
 				
 		return image, GT.type(torch.long)
 
@@ -176,25 +158,7 @@ class ImageFolder2_5D(data.Dataset):
 			A.Affine(p=self.augmentation_prob, scale=(0.9, 1.2)),
 			A.VerticalFlip(p=self.augmentation_prob), # Possibility to cause problems with the rectum and bladder
 		])
-		# This transform is only used for the MRI
-		# affine = tio.Compose([
-		# 	tio.RandomAffine(
-		# 		p=self.augmentation_prob,
-		# 		scales=(0.9, 1.2),
-
-    	# 		degrees=5,
-		# 	)
-		# ])
-		# random_bias = tio.Compose([
-		# 	## Make the training set hard and there is a huge different between the training loss and validation loss
-		# 	# tio.RandomElasticDeformation(   
-		# 	# 	num_control_points=7,  # or just 7
-    	# 	# 	locked_borders=2,),
-			
-		# 	tio.RandomBiasField(p=self.augmentation_prob),
-			
-		# ])
-
+	
 
 
 
@@ -246,7 +210,9 @@ class ImageFolder2_5D(data.Dataset):
 		image = to_tensor(image)
 		GT = to_tensor(GT)
 
-		
+		if self.mode == 'test':
+			return image, GT.type(torch.long)
+
 		return image, GT.type(torch.long)
 
 	def __len__(self):
@@ -270,31 +236,3 @@ def get_loader(image_path, image_size, batch_size, num_workers=4, mode='train',i
 									num_workers=num_workers
 									)
 	return data_loader
-	# return dataset
-
-# import matplotlib.pyplot as plt 
-# path='C:\\Users\\ek779475\\Desktop\\PRO_pCT_CGFL\\2_5D_multiclass_imbalanced'
-# classes = {255: 1, 127: 2, 85: 3, 63: 4}
-# dataload = get_loader(path,256,1,is_multiorgan=True,mode="test",classes =classes,strategy="2_5D")
-
-# image,mask = dataload.__getitem__(55)
-# for (image,mask) in dataload:
-# 	transforms = T.Compose([T.ToPILImage()])
-# 	image = image.data.cpu().detach().numpy()
-# 	# print("-------",image.shape)
-# 	mask = mask.data.cpu().detach().numpy().squeeze()
-# 	# print (np.unique(mask))
-# 	plt.subplot(2,3,1)
-# 	plt.imshow(image[0], cmap="gray")
-
-# 	plt.subplot(2,3,2)
-# 	plt.imshow(image[1], cmap="gray")
-
-# 	plt.subplot(2,3,3)
-# 	plt.imshow(image[2], cmap="gray")
-
-# 	plt.subplot(2,3,5)
-# 	plt.imshow(mask, cmap="jet",alpha=0.5)
-
-# 	plt.show()
-
