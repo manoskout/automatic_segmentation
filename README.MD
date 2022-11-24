@@ -1,24 +1,20 @@
-### Automatic segmentation in Organs-at-risk of the pelvic region - Deep Learning approach
+# Automatic segmentation in organs-at-risk and prostate of the pelvic region
 
-The purpose of this project is to build a robust model to delineate the organ from patients' Magnetic Resonance Images (MRIs).
-The whole implementation is based on state-of-the-art deep learning-based methods. We briefly introduce some of the existed architectures selecting the optimal solution to our challenge. However, due to the small dataset, we had to implement data augmentation techniques to enhance the generalizability of our results.
+The purpose of this project is to build a robust model to delineate the organ from patients' 0.35T Magnetic Resonance Images (MRIs).
+The whole implementation is based on state-of-the-art deep learning-based architectures. The dataset used for this project is a private dataset acquired from 0.35T MR-Linac.
 
-### Abstract
+## Abstract
 
+**Purpose** : The MR-Linac is a recent device combining a linear accelerator with an MRI scanner. The improved soft tissue contrast of MR images is used for the optimum delineation of tumors or organs at risk (OARs) and precise treatment delivery. Automatic segmentation of OARs is a crucial feature to alleviate the time-consuming process of manual segmentation from physicians. In this work, current state-of-the-art deep learning techniques were evaluated based on 2D and 2.5D training strategies to develop a comprehensive tool for accurate segmentation of pelvic OARs dedicated to MR images from a 0.35T MR-Linac system.
+**Methods** :In total, 103 cases with 0.35 T MR images of the pelvic region were investigated. Expert physicians contoured OARs (bladder, rectum, and femoral heads) and prostate. For the training of the neural network, 85 patients were randomly selected, and 18 patients were used for testing. Multiple state-of-the-art U-Net-based neural network architectures were investigated to automatically segment the prostate and OARs. The best model was compared in both 2D and 2.5D training strategies. The evaluation was performed by focusing on the results of two metrics: the Dice Similarity Coefficient (DSC) and the Hausdorff Distance (HD). Based on 2D architectures, Residual Attention U-Net (ResAttUNet) provides the best results among the other deep neural networks. Moreover, the 2.5D version of the configurated ResAttUNet achieved more accurate results. The overall DSC was 0.88±0.09 and 0.86±0.10, and overall HD was 1.78±3.02 mm and 5.90±7.58 mm for 2.5D ResAttUNet and 2D ResAttUNet, respectively.
+**Conclusion**: The 2.5D Residual Attention U-Net architecture provides accurate segmentation of the prostate and the OARs without affecting the computational cost. The finalized tool will be merged with the treatment planning system for in-time automatic segmentation on the 0.35 T MR-Linac.
 
-### Introduction
+## Data management
 
-The continuous rising of the deep learning (DL) techniques in the medical field provides a promising footings in this field. Computer-aided diagnosis and segmentation in radiology provide strong foundations for investigation using deep learning techniques. Amongst the anatomical locations where recent automatic segmentation algorithms have been proposed, the pelvic region remains a significant challenge due to the large intra- and inter-patient variability. In radiation oncology, the accurate countouring of OARs is inevitably necessary step for planning the optimal dose delivery to the affected organ, avoiding the toxicity delivery to surrounding healthy organs. Nonetheless, manual volume segmentation deemed a laborious and time-consuming process for the physicians, leading for delays for the radiation therapy (RT) treatment. Recent studies focused in DL-based methods, although, atlas-based and hybrid techniques remain state-of-the-art. DL is part of the Machine Learning (ML). To put it differently, deep learning levarage deep neural network architectures with multiple hidden layers between input and output. This methods learn feutures from the already segmented dataset by modeling complex non linear relationships. The most dominant architecture for automatic organ segmentation is the UNet including a vast amount of variations that have been already proposed. In this project we tested the most relavant UNet architectures, making an extended review of which one is the optimal solution for the automatic segmentation of pelvic region. It is worth also to refer that we focused both in multi-organ and organ-per-organ segmentation combare the results between these two different methods
+## Preprocessing
 
-### Methods and Materials
-This study includes patient who underwent MRI.
-Axial T2-weighted image were manually segmented by radiologists, which stated as ground truth. These collected images were used for training on the UNet architectures that are used, """"in a k-fold validation paradigm for neural network training and validation"""". The Dice score, a measure of overlap between the manually segmented and automatically derived segmentation, Hausdorff distance, a measure of distance between the manually and automatically segmented organ in a metric space.
+## Architecture
 
-### Results
-The CNN trained on 75 examination of 75 patients. Due to the lack of medical sample a data augmentation process implemented. The customized 2D UNet architecturε has a Dice score of 0.90+-0.02 and Hausdorff Distance 2.05+-1.2.
+## Post-processing
 
-### Conclusion
-A deep learning CNN can automatically segment the OARs from clinical MR Images 
-
-
-# MRIdian
+## Results
